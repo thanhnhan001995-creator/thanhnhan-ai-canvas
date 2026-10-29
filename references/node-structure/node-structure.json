@@ -1,0 +1,1578 @@
+[
+  [
+    "ĐẶC TẢ CHI TIẾT CÁC NODE",
+    null,
+    null,
+    null,
+    null,
+    null
+  ],
+  [
+    "Mỗi node là một phép biến đổi dữ liệu có đầu vào và đầu ra rõ ràng",
+    null,
+    null,
+    null,
+    null,
+    null
+  ],
+  [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+  ],
+  [
+    "Nhóm node",
+    "STT nhóm",
+    "Tên node",
+    "Bên trong node",
+    "Đầu vào",
+    "Đầu ra"
+  ],
+  [
+    "Đầu vào",
+    1,
+    "Nhập đề tài",
+    "Chủ đề, mục tiêu, đối tượng, độ dài",
+    "Người dùng nhập",
+    "Topic"
+  ],
+  [
+    "Đầu vào",
+    2,
+    "Nhập văn bản",
+    "Trình nhập hoặc dán nội dung",
+    "Văn bản",
+    "Text"
+  ],
+  [
+    "Đầu vào",
+    3,
+    "Nhập URL",
+    "URL và tùy chọn đọc nội dung",
+    "URL",
+    "URL[]"
+  ],
+  [
+    "Đầu vào",
+    4,
+    "Nhập tài liệu",
+    "Upload PDF, DOCX, TXT",
+    "File",
+    "Document[]"
+  ],
+  [
+    "Đầu vào",
+    5,
+    "Tải ảnh lên",
+    "Upload, xem trước, mô tả",
+    "File ảnh",
+    "Image[]"
+  ],
+  [
+    "Đầu vào",
+    6,
+    "Tải video lên",
+    "Upload, xem trước, metadata",
+    "File video",
+    "Video[]"
+  ],
+  [
+    "Đầu vào",
+    7,
+    "Tải âm thanh lên",
+    "Upload, nghe thử, metadata",
+    "File âm thanh",
+    "Audio[]"
+  ],
+  [
+    "Đầu vào",
+    8,
+    "Chọn thư viện",
+    "Thư mục, bộ lọc, tìm kiếm",
+    "Thư viện",
+    "Asset[]"
+  ],
+  [
+    "Đầu vào",
+    9,
+    "Hồ sơ thương hiệu",
+    "Giọng văn, màu sắc, logo, font, điều cấm",
+    "Người dùng cấu hình",
+    "BrandProfile"
+  ],
+  [
+    "Đầu vào",
+    10,
+    "Cấu hình video",
+    "Tỷ lệ, thời lượng, FPS, độ phân giải, ngôn ngữ",
+    "Người dùng cấu hình",
+    "VideoConfig"
+  ],
+  [
+    "Đầu vào",
+    11,
+    "Lịch chạy",
+    "Thời gian, chu kỳ, múi giờ",
+    "Cấu hình lịch",
+    "Trigger"
+  ],
+  [
+    "Đầu vào",
+    12,
+    "Webhook",
+    "URL nhận dữ liệu, phương thức, xác thực",
+    "HTTP request",
+    "Data"
+  ],
+  [
+    "Nghiên cứu",
+    1,
+    "Tìm kiếm Internet",
+    "Từ khóa, thời gian, domain, số kết quả",
+    "Topic, Query[]",
+    "SearchResult[]"
+  ],
+  [
+    "Nghiên cứu",
+    2,
+    "Đọc trang web",
+    "Trích xuất tiêu đề, nội dung, ngày đăng",
+    "URL[]",
+    "Source[]"
+  ],
+  [
+    "Nghiên cứu",
+    3,
+    "Đọc tài liệu",
+    "OCR, phân trang, trích nội dung",
+    "Document[]",
+    "Source[]"
+  ],
+  [
+    "Nghiên cứu",
+    4,
+    "Lấy transcript",
+    "Ngôn ngữ, timestamp, nhận diện người nói",
+    "Video hoặc URL",
+    "Transcript"
+  ],
+  [
+    "Nghiên cứu",
+    5,
+    "Tổng hợp nguồn",
+    "Nhóm nguồn theo chủ đề, loại trùng",
+    "Source[]",
+    "ResearchBrief"
+  ],
+  [
+    "Nghiên cứu",
+    6,
+    "Trích xuất dữ kiện",
+    "Dữ kiện, số liệu, nhân vật, thời gian",
+    "Source[]",
+    "Fact[]"
+  ],
+  [
+    "Nghiên cứu",
+    7,
+    "Kiểm tra dữ kiện",
+    "Đối chiếu tuyên bố với nguồn",
+    "Fact[], Source[]",
+    "FactCheckResult[]"
+  ],
+  [
+    "Nghiên cứu",
+    8,
+    "So sánh nguồn",
+    "Tìm điểm giống, khác, mâu thuẫn",
+    "Source[]",
+    "Comparison"
+  ],
+  [
+    "Nghiên cứu",
+    9,
+    "Xếp hạng nguồn",
+    "Uy tín, ngày đăng, tính trực tiếp",
+    "Source[]",
+    "ScoredSource[]"
+  ],
+  [
+    "Nghiên cứu",
+    10,
+    "Duyệt nguồn",
+    "Danh sách nguồn, chọn/loại, ghi chú",
+    "Source[]",
+    "ApprovedSource[]"
+  ],
+  [
+    "Phát triển nội dung",
+    1,
+    "Tạo ý tưởng",
+    "Số lượng, phong cách, chủ đề",
+    "Topic, ResearchBrief",
+    "Idea[]"
+  ],
+  [
+    "Phát triển nội dung",
+    2,
+    "Chấm điểm ý tưởng",
+    "Hấp dẫn, mới lạ, phù hợp kênh",
+    "Idea[]",
+    "ScoredIdea[]"
+  ],
+  [
+    "Phát triển nội dung",
+    3,
+    "Xác định khán giả",
+    "Nhu cầu, kiến thức, nỗi đau",
+    "Topic, dữ liệu kênh",
+    "AudienceProfile"
+  ],
+  [
+    "Phát triển nội dung",
+    4,
+    "Tạo góc tiếp cận",
+    "Góc kể chuyện, lời hứa nội dung",
+    "Idea, AudienceProfile",
+    "Angle[]"
+  ],
+  [
+    "Phát triển nội dung",
+    5,
+    "Tạo dàn ý",
+    "Cấu trúc chương, luận điểm, thời lượng",
+    "Angle, Source[]",
+    "Outline"
+  ],
+  [
+    "Phát triển nội dung",
+    6,
+    "Viết nội dung",
+    "Model, prompt, độ dài, giọng văn",
+    "Outline, Source[], BrandProfile",
+    "Content"
+  ],
+  [
+    "Phát triển nội dung",
+    7,
+    "Viết lại",
+    "Yêu cầu sửa, mức độ thay đổi",
+    "Content, yêu cầu",
+    "Content"
+  ],
+  [
+    "Phát triển nội dung",
+    8,
+    "Mở rộng",
+    "Phần cần mở rộng, độ dài mục tiêu",
+    "Content, Source[]",
+    "Content"
+  ],
+  [
+    "Phát triển nội dung",
+    9,
+    "Rút gọn",
+    "Độ dài mục tiêu, phần cần giữ",
+    "Content",
+    "Content"
+  ],
+  [
+    "Phát triển nội dung",
+    10,
+    "Thay đổi giọng văn",
+    "Phong cách, cảm xúc, độ trang trọng",
+    "Content, BrandProfile",
+    "Content"
+  ],
+  [
+    "Phát triển nội dung",
+    11,
+    "Kiểm tra nội dung",
+    "Logic, mạch lạc, giọng văn",
+    "Content",
+    "ReviewResult"
+  ],
+  [
+    "Phát triển nội dung",
+    12,
+    "Kiểm tra trùng lặp",
+    "Ngưỡng tương đồng, nguồn đối chiếu",
+    "Content, nguồn",
+    "DuplicateReport"
+  ],
+  [
+    "Phát triển nội dung",
+    13,
+    "Kiểm tra chính sách",
+    "Chính sách nền tảng, nội dung nhạy cảm",
+    "Content",
+    "PolicyReport"
+  ],
+  [
+    "Phát triển nội dung",
+    14,
+    "Duyệt nội dung",
+    "Xem, sửa, duyệt hoặc từ chối",
+    "Content, ReviewResult",
+    "Approval, Content"
+  ],
+  [
+    "Kịch bản video",
+    1,
+    "Viết hook",
+    "Loại hook, thời lượng, lời hứa",
+    "Topic, AudienceProfile",
+    "Text"
+  ],
+  [
+    "Kịch bản video",
+    2,
+    "Viết mở đầu",
+    "Hook, giới thiệu, dẫn vào nội dung",
+    "Hook, Outline",
+    "Text"
+  ],
+  [
+    "Kịch bản video",
+    3,
+    "Viết kịch bản",
+    "Lời thoại, ghi chú hình ảnh, nguồn",
+    "Outline, Source[]",
+    "Script"
+  ],
+  [
+    "Kịch bản video",
+    4,
+    "Chia chương",
+    "Tiêu đề và thời gian từng chương",
+    "Script",
+    "Chapter[]"
+  ],
+  [
+    "Kịch bản video",
+    5,
+    "Chia phân cảnh",
+    "Lời thoại, thời lượng, mục đích cảnh",
+    "Script, VideoConfig",
+    "Scene[]"
+  ],
+  [
+    "Kịch bản video",
+    6,
+    "Ước tính thời lượng",
+    "Tốc độ đọc, khoảng nghỉ",
+    "Script hoặc Scene[]",
+    "DurationReport"
+  ],
+  [
+    "Kịch bản video",
+    7,
+    "Tạo lời thoại cảnh",
+    "Viết hoặc tinh chỉnh từng đoạn thoại",
+    "Scene",
+    "Narration"
+  ],
+  [
+    "Kịch bản video",
+    8,
+    "Mô tả hình ảnh cảnh",
+    "Chủ thể, hành động, bối cảnh, phong cách",
+    "Scene",
+    "VisualBrief"
+  ],
+  [
+    "Kịch bản video",
+    9,
+    "Chỉ dẫn dựng phim",
+    "Loại cảnh, chuyển động, hiệu ứng, text",
+    "Scene",
+    "EditingInstruction"
+  ],
+  [
+    "Kịch bản video",
+    10,
+    "Tạo CTA",
+    "Hành động, vị trí, mức độ trực tiếp",
+    "Script, BrandProfile",
+    "Text"
+  ],
+  [
+    "Kịch bản video",
+    11,
+    "Tạo intro/outro",
+    "Logo, lời dẫn, CTA, thời lượng",
+    "BrandProfile, VideoConfig",
+    "Scene[]"
+  ],
+  [
+    "Kịch bản video",
+    12,
+    "Kiểm tra nhịp độ",
+    "Độ dài cảnh, mật độ thông tin",
+    "Scene[]",
+    "PacingReport"
+  ],
+  [
+    "Kịch bản video",
+    13,
+    "Sắp xếp phân cảnh",
+    "Kéo thả hoặc AI đề xuất thứ tự",
+    "Scene[]",
+    "Scene[]"
+  ],
+  [
+    "Hình ảnh",
+    1,
+    "Tạo từ khóa ảnh",
+    "Chủ thể, bối cảnh, từ khóa loại trừ",
+    "VisualBrief",
+    "Query[]"
+  ],
+  [
+    "Hình ảnh",
+    2,
+    "Tìm kho ảnh",
+    "Nhà cung cấp, giấy phép, tỷ lệ",
+    "Query[]",
+    "Image[]"
+  ],
+  [
+    "Hình ảnh",
+    3,
+    "Tìm thư viện ảnh nội bộ",
+    "Từ khóa, tag, dự án, ngày tạo",
+    "Query[]",
+    "Image[]"
+  ],
+  [
+    "Hình ảnh",
+    4,
+    "Tạo ảnh AI",
+    "Model, prompt, tỷ lệ, seed, số lượng",
+    "VisualBrief, ảnh tham chiếu",
+    "Image[]"
+  ],
+  [
+    "Hình ảnh",
+    5,
+    "Image-to-image",
+    "Prompt, độ ảnh hưởng, ảnh gốc",
+    "Image, Text",
+    "Image[]"
+  ],
+  [
+    "Hình ảnh",
+    6,
+    "Xóa nền ảnh",
+    "Ngưỡng tách nền, định dạng",
+    "Image",
+    "Image"
+  ],
+  [
+    "Hình ảnh",
+    7,
+    "Thay nền ảnh",
+    "Ảnh nền hoặc prompt nền",
+    "Image, nền",
+    "Image"
+  ],
+  [
+    "Hình ảnh",
+    8,
+    "Mở rộng khung ảnh",
+    "Tỷ lệ mới, vùng mở rộng",
+    "Image, VideoConfig",
+    "Image"
+  ],
+  [
+    "Hình ảnh",
+    9,
+    "Resize/crop ảnh",
+    "Kích thước, tỷ lệ, điểm lấy nét",
+    "Image",
+    "Image"
+  ],
+  [
+    "Hình ảnh",
+    10,
+    "Upscale ảnh",
+    "Model, độ phân giải mục tiêu",
+    "Image",
+    "Image"
+  ],
+  [
+    "Hình ảnh",
+    11,
+    "Chỉnh màu ảnh",
+    "Preset, độ sáng, tương phản",
+    "Image, BrandProfile",
+    "Image"
+  ],
+  [
+    "Hình ảnh",
+    12,
+    "Thêm chữ vào ảnh",
+    "Nội dung, font, vị trí, animation",
+    "Image, Text",
+    "Image"
+  ],
+  [
+    "Hình ảnh",
+    13,
+    "Thêm logo vào ảnh",
+    "Logo, vị trí, kích thước, opacity",
+    "Image, BrandProfile",
+    "Image"
+  ],
+  [
+    "Hình ảnh",
+    14,
+    "Tạo phương án ảnh",
+    "Số lượng, mức độ biến đổi",
+    "Image hoặc VisualBrief",
+    "Image[]"
+  ],
+  [
+    "Hình ảnh",
+    15,
+    "Chấm điểm ảnh",
+    "Đúng nội dung, chất lượng, thương hiệu",
+    "Image[], Scene",
+    "ScoredImage[]"
+  ],
+  [
+    "Hình ảnh",
+    16,
+    "Chọn ảnh",
+    "Gallery, so sánh, chọn, loại, khóa",
+    "Image[]",
+    "SelectedImage"
+  ],
+  [
+    "Hình ảnh",
+    17,
+    "Duyệt ảnh",
+    "Phê duyệt hoặc yêu cầu làm lại",
+    "SelectedImage",
+    "Approval, Image"
+  ],
+  [
+    "Video",
+    1,
+    "Tìm kho video",
+    "Từ khóa, thời lượng, giấy phép",
+    "Query[]",
+    "Video[]"
+  ],
+  [
+    "Video",
+    2,
+    "Tìm thư viện video nội bộ",
+    "Tag, nội dung, dự án",
+    "Query[]",
+    "Video[]"
+  ],
+  [
+    "Video",
+    3,
+    "Text-to-video",
+    "Model, prompt, thời lượng, tỷ lệ",
+    "VisualBrief",
+    "Video[]"
+  ],
+  [
+    "Video",
+    4,
+    "Image-to-video",
+    "Prompt chuyển động, camera, thời lượng",
+    "Image, VisualBrief",
+    "Video[]"
+  ],
+  [
+    "Video",
+    5,
+    "Tải video từ nguồn",
+    "URL, quyền sử dụng, đoạn cần lấy",
+    "URL",
+    "Video"
+  ],
+  [
+    "Video",
+    6,
+    "Cắt video",
+    "Điểm đầu, điểm cuối",
+    "Video",
+    "Video"
+  ],
+  [
+    "Video",
+    7,
+    "Tách cảnh video",
+    "Phát hiện điểm cắt, độ nhạy",
+    "Video",
+    "Video[]"
+  ],
+  [
+    "Video",
+    8,
+    "Crop/resize video",
+    "Tỷ lệ, kích thước, tracking chủ thể",
+    "Video",
+    "Video"
+  ],
+  [
+    "Video",
+    9,
+    "Đổi tốc độ video",
+    "Tốc độ, giữ cao độ âm thanh",
+    "Video",
+    "Video"
+  ],
+  [
+    "Video",
+    10,
+    "Ổn định video",
+    "Mức ổn định, crop tự động",
+    "Video",
+    "Video"
+  ],
+  [
+    "Video",
+    11,
+    "Xóa nền video",
+    "Model tách nền, chất lượng",
+    "Video",
+    "Video"
+  ],
+  [
+    "Video",
+    12,
+    "Chỉnh màu video",
+    "LUT, độ sáng, tương phản",
+    "Video, BrandProfile",
+    "Video"
+  ],
+  [
+    "Video",
+    13,
+    "Tạo chuyển động ảnh",
+    "Pan, zoom, parallax",
+    "Image, thời lượng",
+    "Video"
+  ],
+  [
+    "Video",
+    14,
+    "Tạo B-roll",
+    "Prompt, thời lượng, số phương án",
+    "Scene, VisualBrief",
+    "Video[]"
+  ],
+  [
+    "Video",
+    15,
+    "Nối video",
+    "Thứ tự, chuyển cảnh",
+    "Video[]",
+    "Video"
+  ],
+  [
+    "Video",
+    16,
+    "Tạo phương án video",
+    "Model, seed, biến thể",
+    "Video hoặc VisualBrief",
+    "Video[]"
+  ],
+  [
+    "Video",
+    17,
+    "Chấm điểm video",
+    "Đúng nội dung, chất lượng, chuyển động",
+    "Video[], Scene",
+    "ScoredVideo[]"
+  ],
+  [
+    "Video",
+    18,
+    "Chọn video",
+    "Preview, trim, chọn, loại, khóa",
+    "Video[]",
+    "SelectedVideo"
+  ],
+  [
+    "Video",
+    19,
+    "Duyệt video",
+    "Phê duyệt hoặc yêu cầu tạo lại",
+    "SelectedVideo",
+    "Approval, Video"
+  ],
+  [
+    "Giọng đọc và âm thanh",
+    1,
+    "Chọn giọng",
+    "Thư viện giọng, ngôn ngữ, nghe thử",
+    "Yêu cầu giọng",
+    "VoiceProfile"
+  ],
+  [
+    "Giọng đọc và âm thanh",
+    2,
+    "Tạo giọng đọc",
+    "Model, giọng, tốc độ, cảm xúc",
+    "Narration, VoiceProfile",
+    "Audio"
+  ],
+  [
+    "Giọng đọc và âm thanh",
+    3,
+    "Clone giọng",
+    "Mẫu giọng, đồng ý sử dụng",
+    "AudioSample",
+    "VoiceProfile"
+  ],
+  [
+    "Giọng đọc và âm thanh",
+    4,
+    "Chia lời đọc",
+    "Theo câu, cảnh hoặc giới hạn ký tự",
+    "Narration",
+    "Text[]"
+  ],
+  [
+    "Giọng đọc và âm thanh",
+    5,
+    "Ghép lời đọc",
+    "Khoảng nghỉ, crossfade",
+    "Audio[]",
+    "Audio"
+  ],
+  [
+    "Giọng đọc và âm thanh",
+    6,
+    "Điều chỉnh tốc độ giọng",
+    "Tốc độ, giữ cao độ",
+    "Audio",
+    "Audio"
+  ],
+  [
+    "Giọng đọc và âm thanh",
+    7,
+    "Điều chỉnh cảm xúc",
+    "Cảm xúc, cường độ, điểm nhấn",
+    "Audio, chỉ dẫn",
+    "Audio"
+  ],
+  [
+    "Giọng đọc và âm thanh",
+    8,
+    "Làm sạch âm thanh",
+    "Khử nhiễu, echo, tiếng thở",
+    "Audio",
+    "Audio"
+  ],
+  [
+    "Giọng đọc và âm thanh",
+    9,
+    "Chuẩn hóa âm lượng",
+    "LUFS mục tiêu, giới hạn peak",
+    "Audio",
+    "Audio"
+  ],
+  [
+    "Giọng đọc và âm thanh",
+    10,
+    "Tìm nhạc nền",
+    "Thể loại, mood, giấy phép",
+    "Scene[], BrandProfile",
+    "Audio[]"
+  ],
+  [
+    "Giọng đọc và âm thanh",
+    11,
+    "Tạo nhạc nền",
+    "Prompt, thời lượng, vòng lặp",
+    "Yêu cầu âm nhạc",
+    "Audio[]"
+  ],
+  [
+    "Giọng đọc và âm thanh",
+    12,
+    "Tạo hiệu ứng âm thanh",
+    "Loại hiệu ứng, thời điểm",
+    "Scene",
+    "Audio[]"
+  ],
+  [
+    "Giọng đọc và âm thanh",
+    13,
+    "Trộn voice và nhạc",
+    "Mức âm lượng, fade",
+    "Voice, nhạc",
+    "Audio"
+  ],
+  [
+    "Giọng đọc và âm thanh",
+    14,
+    "Ducking",
+    "Mức giảm nhạc khi có thoại",
+    "Voice, nhạc",
+    "Audio"
+  ],
+  [
+    "Giọng đọc và âm thanh",
+    15,
+    "Duyệt âm thanh",
+    "Nghe thử, chọn, khóa",
+    "Audio[]",
+    "Approval, Audio"
+  ],
+  [
+    "Subtitle và chữ",
+    1,
+    "Speech-to-text",
+    "Model, ngôn ngữ, timestamp",
+    "Audio hoặc Video",
+    "Transcript"
+  ],
+  [
+    "Subtitle và chữ",
+    2,
+    "Tạo subtitle",
+    "Chia câu và gán thời gian",
+    "Script, Audio",
+    "Subtitle"
+  ],
+  [
+    "Subtitle và chữ",
+    3,
+    "Đồng bộ subtitle",
+    "Căn theo waveform hoặc lời đọc",
+    "Subtitle, Audio",
+    "Subtitle"
+  ],
+  [
+    "Subtitle và chữ",
+    4,
+    "Sửa chính tả subtitle",
+    "Từ điển riêng, tên nhân vật",
+    "Subtitle",
+    "Subtitle"
+  ],
+  [
+    "Subtitle và chữ",
+    5,
+    "Chia dòng subtitle",
+    "Số ký tự, số dòng, tốc độ đọc",
+    "Subtitle",
+    "Subtitle"
+  ],
+  [
+    "Subtitle và chữ",
+    6,
+    "Dịch subtitle",
+    "Ngôn ngữ đích, thuật ngữ",
+    "Subtitle",
+    "Subtitle"
+  ],
+  [
+    "Subtitle và chữ",
+    7,
+    "Chọn kiểu subtitle",
+    "Font, màu, vị trí, animation",
+    "BrandProfile",
+    "SubtitleStyle"
+  ],
+  [
+    "Subtitle và chữ",
+    8,
+    "Chèn subtitle",
+    "Kiểu hiển thị, vùng an toàn",
+    "Video, Subtitle",
+    "Video"
+  ],
+  [
+    "Subtitle và chữ",
+    9,
+    "Xuất SRT/VTT",
+    "Định dạng, encoding",
+    "Subtitle",
+    "File"
+  ],
+  [
+    "Subtitle và chữ",
+    10,
+    "Text nhấn mạnh",
+    "Từ khóa, thời gian, kiểu hiệu ứng",
+    "Scene, Subtitle",
+    "TextOverlay[]"
+  ],
+  [
+    "Subtitle và chữ",
+    11,
+    "Lower third",
+    "Tên, chức danh, vị trí",
+    "Text, BrandProfile",
+    "TextOverlay"
+  ],
+  [
+    "Dựng cảnh",
+    1,
+    "Tạo timeline cảnh",
+    "Track, lớp, thời gian bắt đầu/kết thúc",
+    "Scene, Asset[]",
+    "SceneTimeline"
+  ],
+  [
+    "Dựng cảnh",
+    2,
+    "Ghép thoại và tư liệu",
+    "Đồng bộ theo nội dung và thời lượng",
+    "Voice, ảnh/video",
+    "SceneTimeline"
+  ],
+  [
+    "Dựng cảnh",
+    3,
+    "Căn thời lượng hình",
+    "Tự cắt hoặc kéo dài theo voice",
+    "SceneTimeline",
+    "SceneTimeline"
+  ],
+  [
+    "Dựng cảnh",
+    4,
+    "Tạo chuyển động ảnh cho cảnh",
+    "Pan, zoom, focus, parallax",
+    "Image, Scene",
+    "Video"
+  ],
+  [
+    "Dựng cảnh",
+    5,
+    "Chèn text cảnh",
+    "Nội dung, thời điểm, style",
+    "SceneTimeline, TextOverlay[]",
+    "SceneTimeline"
+  ],
+  [
+    "Dựng cảnh",
+    6,
+    "Chèn hiệu ứng",
+    "Hiệu ứng, cường độ, thời điểm",
+    "SceneTimeline",
+    "SceneTimeline"
+  ],
+  [
+    "Dựng cảnh",
+    7,
+    "Chèn chuyển cảnh",
+    "Loại chuyển cảnh, thời lượng",
+    "Hai cảnh",
+    "Transition"
+  ],
+  [
+    "Dựng cảnh",
+    8,
+    "Preview cảnh",
+    "Chất lượng thấp, watermark",
+    "SceneTimeline",
+    "PreviewFile"
+  ],
+  [
+    "Dựng cảnh",
+    9,
+    "Render cảnh",
+    "Codec, độ phân giải, FPS",
+    "SceneTimeline, VideoConfig",
+    "Video"
+  ],
+  [
+    "Dựng cảnh",
+    10,
+    "Kiểm tra cảnh",
+    "Hình–lời, lỗi file, cảnh trống",
+    "Video, Scene",
+    "SceneQAReport"
+  ],
+  [
+    "Dựng cảnh",
+    11,
+    "Duyệt cảnh",
+    "Xem, ghi chú, duyệt/từ chối",
+    "Video, SceneQAReport",
+    "Approval"
+  ],
+  [
+    "Dựng cảnh",
+    12,
+    "Khóa cảnh",
+    "Chặn workflow ghi đè kết quả",
+    "Scene, Approval",
+    "LockedScene"
+  ],
+  [
+    "Dựng video tổng",
+    1,
+    "Sắp xếp cảnh",
+    "Kéo thả, số thứ tự",
+    "Scene[]",
+    "Scene[]"
+  ],
+  [
+    "Dựng video tổng",
+    2,
+    "Ghép các cảnh",
+    "Thứ tự, khoảng cách, transition",
+    "Video[]",
+    "Timeline"
+  ],
+  [
+    "Dựng video tổng",
+    3,
+    "Thêm intro",
+    "Chọn mẫu, vị trí",
+    "Timeline, intro",
+    "Timeline"
+  ],
+  [
+    "Dựng video tổng",
+    4,
+    "Thêm outro",
+    "Chọn mẫu, CTA",
+    "Timeline, outro",
+    "Timeline"
+  ],
+  [
+    "Dựng video tổng",
+    5,
+    "Thêm nhạc nền",
+    "Nhạc, loop, fade, ducking",
+    "Timeline, Audio",
+    "Timeline"
+  ],
+  [
+    "Dựng video tổng",
+    6,
+    "Chèn logo",
+    "Logo, vị trí, thời gian",
+    "Timeline, BrandProfile",
+    "Timeline"
+  ],
+  [
+    "Dựng video tổng",
+    7,
+    "Chèn chapter",
+    "Tên chương, timestamp",
+    "Timeline, Chapter[]",
+    "Timeline"
+  ],
+  [
+    "Dựng video tổng",
+    8,
+    "Áp dụng thương hiệu",
+    "Font, màu, logo, preset",
+    "Timeline, BrandProfile",
+    "Timeline"
+  ],
+  [
+    "Dựng video tổng",
+    9,
+    "Tạo timeline tổng",
+    "Toàn bộ track hình, tiếng, chữ",
+    "Cảnh, âm thanh, subtitle",
+    "Timeline"
+  ],
+  [
+    "Dựng video tổng",
+    10,
+    "Preview chất lượng thấp",
+    "Độ phân giải, watermark",
+    "Timeline",
+    "PreviewFile"
+  ],
+  [
+    "Dựng video tổng",
+    11,
+    "Render nháp",
+    "Preset render nhanh",
+    "Timeline",
+    "Video"
+  ],
+  [
+    "Dựng video tổng",
+    12,
+    "Render chính",
+    "Codec, bitrate, độ phân giải",
+    "Timeline, VideoConfig",
+    "Video"
+  ],
+  [
+    "Dựng video tổng",
+    13,
+    "Xuất nhiều tỷ lệ",
+    "16:9, 9:16, 1:1",
+    "Timeline, cấu hình",
+    "Video[]"
+  ],
+  [
+    "Kiểm tra chất lượng",
+    1,
+    "Kiểm tra thiếu tư liệu",
+    "Cảnh không có hình, tiếng hoặc text",
+    "Scene[]",
+    "QAReport"
+  ],
+  [
+    "Kiểm tra chất lượng",
+    2,
+    "Kiểm tra trùng ảnh",
+    "Hash hình ảnh, ngưỡng tương đồng",
+    "Asset[]",
+    "QAReport"
+  ],
+  [
+    "Kiểm tra chất lượng",
+    3,
+    "Kiểm tra màn hình đen",
+    "Ngưỡng sáng, thời lượng tối đa",
+    "Video",
+    "QAReport"
+  ],
+  [
+    "Kiểm tra chất lượng",
+    4,
+    "Kiểm tra âm thanh",
+    "Im lặng, clipping, âm lượng",
+    "Audio hoặc Video",
+    "QAReport"
+  ],
+  [
+    "Kiểm tra chất lượng",
+    5,
+    "Kiểm tra subtitle",
+    "Lệch thời gian, tràn khung, lỗi chữ",
+    "Video, Subtitle",
+    "QAReport"
+  ],
+  [
+    "Kiểm tra chất lượng",
+    6,
+    "Kiểm tra hình–lời",
+    "So sánh ngữ nghĩa cảnh và lời thoại",
+    "Scene[], Video",
+    "QAReport"
+  ],
+  [
+    "Kiểm tra chất lượng",
+    7,
+    "Kiểm tra kỹ thuật",
+    "Codec, FPS, bitrate, độ phân giải",
+    "Video",
+    "TechnicalReport"
+  ],
+  [
+    "Kiểm tra chất lượng",
+    8,
+    "Kiểm tra bản quyền",
+    "Nguồn, giấy phép, thời hạn sử dụng",
+    "Asset[]",
+    "RightsReport"
+  ],
+  [
+    "Kiểm tra chất lượng",
+    9,
+    "Kiểm tra nhạy cảm",
+    "Bạo lực, tình dục, nhận diện cá nhân",
+    "Video, Script",
+    "SafetyReport"
+  ],
+  [
+    "Kiểm tra chất lượng",
+    10,
+    "Kiểm tra YouTube",
+    "Tiêu đề, nội dung, thumbnail, chính sách",
+    "Gói xuất bản",
+    "PolicyReport"
+  ],
+  [
+    "Kiểm tra chất lượng",
+    11,
+    "Chấm điểm thành phẩm",
+    "Nội dung, kỹ thuật, thương hiệu",
+    "Video và báo cáo",
+    "FinalScore"
+  ],
+  [
+    "Kiểm tra chất lượng",
+    12,
+    "Duyệt xuất bản",
+    "Preview, checklist, ghi chú",
+    "Video và báo cáo",
+    "Approval"
+  ],
+  [
+    "Xuất bản",
+    1,
+    "Tạo tiêu đề",
+    "Số phương án, độ dài, từ khóa",
+    "Script, AudienceProfile",
+    "Title[]"
+  ],
+  [
+    "Xuất bản",
+    2,
+    "Tạo mô tả",
+    "Tóm tắt, CTA, link, nguồn",
+    "Script, Source[]",
+    "Description"
+  ],
+  [
+    "Xuất bản",
+    3,
+    "Tạo chapter metadata",
+    "Tên chương và timestamp",
+    "Chapter[], Timeline",
+    "ChapterMetadata"
+  ],
+  [
+    "Xuất bản",
+    4,
+    "Tạo hashtag",
+    "Chủ đề, số lượng, nền tảng",
+    "Script",
+    "Tag[]"
+  ],
+  [
+    "Xuất bản",
+    5,
+    "Tạo thumbnail",
+    "Prompt, template, nhân vật, text",
+    "Script, BrandProfile",
+    "Image[]"
+  ],
+  [
+    "Xuất bản",
+    6,
+    "Chấm thumbnail",
+    "Dễ đọc, tương phản, đúng nội dung",
+    "Image[]",
+    "ScoredImage[]"
+  ],
+  [
+    "Xuất bản",
+    7,
+    "A/B thumbnail",
+    "Chọn các phương án thử nghiệm",
+    "Image[]",
+    "ThumbnailTest"
+  ],
+  [
+    "Xuất bản",
+    8,
+    "Upload YouTube",
+    "Kênh, quyền riêng tư, file",
+    "Video và metadata",
+    "UploadResult"
+  ],
+  [
+    "Xuất bản",
+    9,
+    "Đặt lịch đăng",
+    "Ngày giờ, múi giờ",
+    "UploadResult, lịch",
+    "PublishSchedule"
+  ],
+  [
+    "Xuất bản",
+    10,
+    "Thêm playlist",
+    "Playlist đích, vị trí",
+    "Video ID",
+    "PlaylistResult"
+  ],
+  [
+    "Xuất bản",
+    11,
+    "Thiết lập quyền riêng tư",
+    "Private, unlisted, public",
+    "Video ID, cấu hình",
+    "PublishResult"
+  ],
+  [
+    "Xuất bản",
+    12,
+    "Ghim bình luận",
+    "Nội dung bình luận",
+    "Video ID, Text",
+    "CommentResult"
+  ],
+  [
+    "Xuất bản",
+    13,
+    "Lưu kết quả xuất bản",
+    "URL, Video ID, ngày đăng, trạng thái",
+    "PublishResult",
+    "PublishedVideo"
+  ],
+  [
+    "Điều khiển workflow",
+    1,
+    "Bắt đầu",
+    "Kiểu kích hoạt",
+    "Trigger",
+    "Dữ liệu ban đầu"
+  ],
+  [
+    "Điều khiển workflow",
+    2,
+    "Kết thúc",
+    "Trạng thái và dữ liệu cần trả",
+    "Dữ liệu bất kỳ",
+    "WorkflowResult"
+  ],
+  [
+    "Điều khiển workflow",
+    3,
+    "If/Else",
+    "Điều kiện, toán tử",
+    "Dữ liệu bất kỳ",
+    "Nhánh đúng/sai"
+  ],
+  [
+    "Điều khiển workflow",
+    4,
+    "Switch",
+    "Nhiều điều kiện",
+    "Dữ liệu bất kỳ",
+    "Một trong nhiều nhánh"
+  ],
+  [
+    "Điều khiển workflow",
+    5,
+    "Chạy song song",
+    "Danh sách nhánh",
+    "Dữ liệu",
+    "Nhiều tiến trình"
+  ],
+  [
+    "Điều khiển workflow",
+    6,
+    "Gộp kết quả",
+    "Kiểu merge, khóa liên kết",
+    "Nhiều đầu vào",
+    "Dữ liệu đã gộp"
+  ],
+  [
+    "Điều khiển workflow",
+    7,
+    "Loop từng cảnh",
+    "Biến phần tử, giới hạn đồng thời",
+    "Scene[]",
+    "Từng Scene"
+  ],
+  [
+    "Điều khiển workflow",
+    8,
+    "Chờ xử lý",
+    "Điều kiện hoàn thành, timeout",
+    "Job ID",
+    "Kết quả job"
+  ],
+  [
+    "Điều khiển workflow",
+    9,
+    "Delay",
+    "Thời gian chờ",
+    "Dữ liệu",
+    "Dữ liệu giữ nguyên"
+  ],
+  [
+    "Điều khiển workflow",
+    10,
+    "Retry",
+    "Số lần, khoảng chờ",
+    "Node lỗi",
+    "Kết quả hoặc lỗi"
+  ],
+  [
+    "Điều khiển workflow",
+    11,
+    "Giới hạn thử lại",
+    "Số lần tối đa",
+    "Trạng thái chạy",
+    "Cho chạy hoặc dừng"
+  ],
+  [
+    "Điều khiển workflow",
+    12,
+    "Chạy thủ công",
+    "Nút thực thi",
+    "Người dùng",
+    "Trigger"
+  ],
+  [
+    "Điều khiển workflow",
+    13,
+    "Yêu cầu phê duyệt",
+    "Nội dung cần duyệt, người duyệt",
+    "Dữ liệu bất kỳ",
+    "Approval"
+  ],
+  [
+    "Điều khiển workflow",
+    14,
+    "Tạm dừng",
+    "Lý do, điều kiện tiếp tục",
+    "Workflow",
+    "Trạng thái chờ"
+  ],
+  [
+    "Điều khiển workflow",
+    15,
+    "Xử lý lỗi",
+    "Loại lỗi, nhánh dự phòng",
+    "Error",
+    "Kết quả xử lý"
+  ],
+  [
+    "Điều khiển workflow",
+    16,
+    "Workflow con",
+    "Chọn workflow, ánh xạ dữ liệu",
+    "Dữ liệu",
+    "Kết quả workflow con"
+  ],
+  [
+    "Điều khiển workflow",
+    17,
+    "Gọi API",
+    "URL, method, header, body",
+    "Dữ liệu",
+    "API response"
+  ],
+  [
+    "Điều khiển workflow",
+    18,
+    "Chạy mã",
+    "JavaScript, giới hạn thực thi",
+    "Dữ liệu",
+    "Dữ liệu tùy chỉnh"
+  ],
+  [
+    "Quản lý dữ liệu",
+    1,
+    "Lưu biến",
+    "Tên, kiểu, phạm vi",
+    "Giá trị",
+    "Variable"
+  ],
+  [
+    "Quản lý dữ liệu",
+    2,
+    "Chuyển đổi dữ liệu",
+    "Ánh xạ trường, đổi kiểu",
+    "Dữ liệu",
+    "Dữ liệu mới"
+  ],
+  [
+    "Quản lý dữ liệu",
+    3,
+    "Ghép dữ liệu",
+    "Khóa ghép, chiến lược",
+    "Nhiều dữ liệu",
+    "Dữ liệu đã ghép"
+  ],
+  [
+    "Quản lý dữ liệu",
+    4,
+    "Lọc danh sách",
+    "Điều kiện lọc",
+    "Danh sách",
+    "Danh sách"
+  ],
+  [
+    "Quản lý dữ liệu",
+    5,
+    "Sắp xếp danh sách",
+    "Trường, tăng/giảm",
+    "Danh sách",
+    "Danh sách"
+  ],
+  [
+    "Quản lý dữ liệu",
+    6,
+    "Chọn phần tử",
+    "Theo vị trí, điểm số hoặc điều kiện",
+    "Danh sách",
+    "Một phần tử"
+  ],
+  [
+    "Quản lý dữ liệu",
+    7,
+    "Lưu file",
+    "Tên, thư mục, định dạng",
+    "File",
+    "StoredFile"
+  ],
+  [
+    "Quản lý dữ liệu",
+    8,
+    "Lưu phiên bản",
+    "Tên phiên bản, ghi chú",
+    "Dữ liệu hoặc file",
+    "Version"
+  ],
+  [
+    "Quản lý dữ liệu",
+    9,
+    "Lấy phiên bản cũ",
+    "Phiên bản hoặc thời điểm",
+    "ID đối tượng",
+    "Dữ liệu cũ"
+  ],
+  [
+    "Quản lý dữ liệu",
+    10,
+    "Đọc thư viện",
+    "Bộ lọc, tag, loại file",
+    "Truy vấn",
+    "Asset[]"
+  ],
+  [
+    "Quản lý dữ liệu",
+    11,
+    "Ghi log",
+    "Mức log, nội dung, node nguồn",
+    "Dữ liệu thực thi",
+    "LogEntry"
+  ],
+  [
+    "Quản lý dữ liệu",
+    12,
+    "Theo dõi chi phí",
+    "Provider, model, token, credit",
+    "Kết quả node",
+    "CostRecord"
+  ],
+  [
+    "Quản lý dữ liệu",
+    13,
+    "Cache kết quả",
+    "Khóa cache, thời hạn",
+    "Dữ liệu",
+    "CachedData"
+  ],
+  [
+    "Quản lý dữ liệu",
+    14,
+    "Xóa file tạm",
+    "Tuổi file, trạng thái sử dụng",
+    "File tạm",
+    "CleanupResult"
+  ]
+]
