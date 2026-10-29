@@ -1663,6 +1663,13 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm test` — build thành công, **42/42** bài kiểm tra đạt.
 
+## 2026-10-29 +07:00 — Đưa mã nguồn Content Flow vào Git
+
+- Bổ sung README theo đúng Content Flow AI Canvas, kèm hướng dẫn chạy, kiểm tra, nguyên tắc cấp API key và ranh giới dữ liệu cục bộ.
+- Cập nhật `.gitignore` để không đưa cache model, trạng thái processor theo máy, log, audio/media thử nghiệm và dependency vendor trong tài liệu tham chiếu vào repository.
+
+**Kiểm tra:** `npm test` — build thành công, **42/42** bài kiểm tra đạt.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 
