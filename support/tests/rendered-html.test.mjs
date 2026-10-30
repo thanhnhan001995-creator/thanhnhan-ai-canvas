@@ -21,6 +21,7 @@ test("server-renders the Tesseract application", async () => {
 
   const html = await response.text();
   assert.match(html, /Tesseract/);
+  assert.match(html, /tesseract-icon\.svg/);
   assert.match(html, /Điều phối tác vụ AI bằng node/);
   assert.match(html, /Chạy workflow/);
   assert.doesNotMatch(html, /codex-preview/);
@@ -46,6 +47,7 @@ test("defines typed workflow nodes and local persistence", async () => {
   assert.match(page, /workflowNameFromPath\(file\.name\)/);
   assert.match(page, /executeWorkflowNode/);
   assert.match(page, /Sao chép output/);
+  assert.match(page, /className="brand-mark" src="\/tesseract-icon\.svg"/);
   assert.match(page, /navigator\.clipboard\?\.writeText/);
   assert.match(page, /document\.execCommand\("copy"\)/);
   assert.match(css, /\.output-section pre[^\n]*user-select: text/);

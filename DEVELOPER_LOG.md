@@ -1678,6 +1678,14 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm test` — build thành công, **44/44** bài kiểm tra đạt.
 
+## 2026-10-30 +07:00 — Phân biệt icon ứng dụng và icon workflow
+
+- Thay chữ `T` trên thanh ứng dụng bằng icon khối Tesseract thực tế.
+- Tạo icon `.tess` riêng: tờ giấy có biểu tượng Tesseract, dùng khi Windows liên kết tệp workflow với ứng dụng.
+- Cập nhật công cụ tạo `.ico` để sinh đồng thời icon ứng dụng và icon tài liệu đa kích cỡ; cấu hình installer dùng đúng icon tài liệu cho phần mở rộng `.tess`.
+
+**Kiểm tra:** `npm test` — build thành công, **44/44** bài kiểm tra đạt. Đã cài installer, xác nhận registry `.tess` trỏ đến `tesseract-document.ico` và `Tesseract.exe` khởi động với server nội bộ HTTP 200.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 

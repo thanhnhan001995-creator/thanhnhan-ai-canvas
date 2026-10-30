@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title>Tệp workflow Tesseract</title>
+  <defs>
+    <linearGradient id="paper" x1="48" y1="25" x2="207" y2="232" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dce5f4"/>
+    </linearGradient>
+    <linearGradient id="tile" x1="87" y1="78" x2="176" y2="169" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#b9a8ff"/>
+      <stop offset=".48" stop-color="#785cff"/>
+      <stop offset="1" stop-color="#3721a6"/>
+    </linearGradient>
+  </defs>
+  <path d="M48 17h105l55 55v147c0 11-9 20-20 20H48c-11 0-20-9-20-20V37c0-11 9-20 20-20Z" fill="#111827" opacity=".42"/>
+  <path d="M48 13h101l59 59v143c0 11-9 20-20 20H48c-11 0-20-9-20-20V33c0-11 9-20 20-20Z" fill="url(#paper)"/>
+  <path d="M149 13v43c0 9 7 16 16 16h43" fill="#cad5ea"/>
+  <path d="M149 13v43c0 9 7 16 16 16h43" fill="none" stroke="#aebed9" stroke-width="7" stroke-linejoin="round"/>
+  <rect x="61" y="75" width="135" height="126" rx="27" fill="#161139"/>
+  <rect x="66" y="80" width="125" height="116" rx="23" fill="url(#tile)"/>
+  <path d="M128 98 165 119v42l-37 22-37-22v-42z" fill="#18123e" fill-opacity=".55" stroke="#f8f7ff" stroke-width="5" stroke-linejoin="round"/>
+  <path d="m128 98 25 14-25 15-25-15zm0 29 25 14v25l-25 15-25-15v-25z" fill="#f4f1ff" fill-opacity=".72" stroke="#f8f7ff" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M103 112v29m50-29v29m-25-14v29" fill="none" stroke="#f8f7ff" stroke-width="4" stroke-linecap="round"/>
+  <path d="M58 214h80" stroke="#aebed9" stroke-width="7" stroke-linecap="round"/>
+</svg>

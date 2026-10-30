@@ -99,7 +99,7 @@
         "ext": "tess",
         "name": "Tesseract workflow",
         "description": "Tesseract workflow",
-        "icon": "tesseract.ico"
+        "icon": "tesseract-document.ico"
       }
     ]
   },

@@ -4,9 +4,11 @@ import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const svgPath = path.join(root, "public", "tesseract-icon.svg");
-const iconPath = path.join(root, "public", "tesseract.ico");
 const sizes = [16, 32, 48, 64, 128, 256];
+const iconAssets = [
+  { source: "tesseract-icon.svg", output: "tesseract.ico", label: "icon ứng dụng" },
+  { source: "tesseract-document-icon.svg", output: "tesseract-document.ico", label: "icon tệp .tess" },
+];
 
 function icoFromPngFrames(frames) {
   const headerSize = 6 + frames.length * 16;
@@ -31,10 +33,13 @@ function icoFromPngFrames(frames) {
   return output;
 }
 
-const svg = await readFile(svgPath);
-const frames = await Promise.all(sizes.map(async (size) => ({
-  size,
-  buffer: await sharp(svg).resize(size, size).png().toBuffer(),
-})));
-await writeFile(iconPath, icoFromPngFrames(frames));
-console.log(`Đã tạo ${iconPath}`);
+for (const asset of iconAssets) {
+  const svg = await readFile(path.join(root, "public", asset.source));
+  const frames = await Promise.all(sizes.map(async (size) => ({
+    size,
+    buffer: await sharp(svg).resize(size, size).png().toBuffer(),
+  })));
+  const iconPath = path.join(root, "public", asset.output);
+  await writeFile(iconPath, icoFromPngFrames(frames));
+  console.log(`Đã tạo ${asset.label}: ${iconPath}`);
+}

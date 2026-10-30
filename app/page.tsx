@@ -4475,7 +4475,7 @@ function WorkflowApp() {
     <main className="app-shell">
       <header className="studio-header">
         <div className="app-menubar">
-          <div className="brand-mark">T</div>
+          <img className="brand-mark" src="/tesseract-icon.svg" alt="" aria-hidden="true" />
           <strong className="app-name">Tesseract</strong>
           <nav className="app-menu" aria-label="Menu ứng dụng">
             <div className="menu-group">

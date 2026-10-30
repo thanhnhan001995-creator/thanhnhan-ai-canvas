@@ -41,9 +41,8 @@ button { color: inherit; }
 
 .brand-mark {
   width: 34px; height: 34px; border-radius: 10px;
-  display: grid; place-items: center;
-  font-weight: 800; font-size: 13px;
-  background: linear-gradient(145deg, #9b7cff, #5840db);
+  display: block;
+  object-fit: contain;
   box-shadow: 0 8px 28px rgba(124, 92, 255, .3);
 }
 
@@ -516,7 +515,7 @@ button { color: inherit; }
 /* Blender-inspired working surface: compact menus, dedicated tool areas and docked panels. */
 .studio-header { position: relative; flex: 0 0 33px; min-width: 0; border-bottom: 1px solid #27303a; background: #25282d; color: #dfe4e9; z-index: 60; }
 .app-menubar { height: 33px; display: flex; align-items: center; gap: 9px; padding: 0 10px; border-bottom: 1px solid #363a40; background: #202226; }
-.app-menubar .brand-mark { width: 21px; height: 21px; border-radius: 4px; font-size: 9px; background: linear-gradient(145deg, #8b71ee, #4c3ab7); box-shadow: none; }
+.app-menubar .brand-mark { width: 21px; height: 21px; border-radius: 4px; box-shadow: none; }
 .app-name { font-size: 12px; letter-spacing: .1px; white-space: nowrap; }
 .app-menu { display: flex; align-items: center; gap: 1px; }
 .app-menu button { border: 0; background: transparent; color: #b9c0c9; cursor: pointer; font-size: 11px; }
