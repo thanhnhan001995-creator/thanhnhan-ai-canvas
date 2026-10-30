@@ -34,6 +34,7 @@ import { beginLocalMediaWorkflowRun, controlLocalMediaWorkflow, endLocalMediaWor
 import { hasNodeExecutor } from "./node-execution.ts";
 import { currentOpenAiModel, getAiModelCapabilities, replacementForRetiredOpenAiModel, type CapabilityState } from "./ai-model-capabilities";
 import { nextNodeName, nodeFamilyOf } from "./node-identity";
+import { parseWorkflowDocument, serializeTessWorkflow, workflowNameFromPath } from "../shared/tess-document.mjs";
 
 declare global {
   interface Window {
@@ -2291,13 +2292,6 @@ function fileNameFromPath(filePath: string): string {
   return filePath.split(/[\\/]/).pop() || filePath;
 }
 
-function workflowNameFromPath(filePath: string): string {
-  return fileNameFromPath(filePath)
-    .replace(/\.contentflow\.json$/i, "")
-    .replace(/\.json$/i, "")
-    .trim() || "New workflow";
-}
-
 function desktopRuntimeFile(file: { name: string; type: string; data?: Uint8Array; path?: string; size?: number; pathOnly?: boolean }) {
   const runtimeFile = new File([file.data ?? new Uint8Array()], file.name, { type: file.type }) as File & { contentFlowPath?: string; contentFlowSize?: number; contentFlowPathOnly?: boolean };
   if (file.path) runtimeFile.contentFlowPath = file.path;
@@ -3345,9 +3339,9 @@ function WorkflowApp() {
         const file = files?.[0];
         if (error || !file?.data) return { canceled: false, error: error || "Không thể đọc tệp workflow gần đây." };
         try {
-          return { canceled: false, path: recent.path, workflow: JSON.parse(new TextDecoder().decode(file.data)) };
+          return { canceled: false, path: recent.path, workflow: parseWorkflowDocument(new TextDecoder().decode(file.data)) };
         } catch {
-          return { canceled: false, error: "Tệp workflow gần đây không phải JSON hợp lệ." };
+          return { canceled: false, error: "Tệp workflow gần đây không hợp lệ." };
         }
       });
     if (result.canceled) return false;
@@ -4398,14 +4392,14 @@ function WorkflowApp() {
     const name = workflowName.trim() || "New workflow";
     const safeFileName = name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").replace(/[. ]+$/g, "").trim() || "New workflow";
     setWorkflowName(name);
-    const blob = new Blob([JSON.stringify({ version: 6, name, nodes, edges, groups: workflowGroups }, null, 2)], { type: "application/json" });
+    const blob = new Blob([serializeTessWorkflow({ version: 6, name, nodes, edges, groups: workflowGroups })], { type: "application/x-tesseract-workflow" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `${safeFileName}.json`;
+    anchor.download = `${safeFileName}.tess`;
     anchor.click();
     URL.revokeObjectURL(url);
-    setNotice("Đã xuất workflow thành tệp JSON.");
+    setNotice("Đã xuất workflow thành tệp Tesseract (.tess).");
   };
 
   const importWorkflow = (file?: File) => {
@@ -4413,7 +4407,7 @@ function WorkflowApp() {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        loadWorkflowData(JSON.parse(String(reader.result)), file.name.replace(/\.[^.]+$/, "").trim(), null);
+        loadWorkflowData(parseWorkflowDocument(String(reader.result)), workflowNameFromPath(file.name), null);
       } catch {
         setNotice("Tệp workflow không hợp lệ.");
       }
@@ -4481,8 +4475,8 @@ function WorkflowApp() {
     <main className="app-shell">
       <header className="studio-header">
         <div className="app-menubar">
-          <div className="brand-mark">CF</div>
-          <strong className="app-name">Content Flow</strong>
+          <div className="brand-mark">T</div>
+          <strong className="app-name">Tesseract</strong>
           <nav className="app-menu" aria-label="Menu ứng dụng">
             <div className="menu-group">
               <button aria-expanded={openMenu === "file"} onClick={() => setOpenMenu((current) => current === "file" ? null : "file")}>Tệp</button>
@@ -4553,7 +4547,7 @@ function WorkflowApp() {
           <div className="top-actions">
             <button className="menu-action" title="Workflow mới (Ctrl+N)" onClick={() => setConfirmAction("reset")}>Mới</button>
             <button className="menu-action" title="Mở workflow (Ctrl+O)" onClick={showOpenWorkflowDialog}>Mở</button>
-            <input ref={importRef} type="file" accept="application/json,.json" hidden onChange={(event) => { importWorkflow(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+            <input ref={importRef} type="file" accept=".tess,application/json,.json" hidden onChange={(event) => { importWorkflow(event.target.files?.[0]); event.currentTarget.value = ""; }} />
             <button className="menu-action" onClick={exportWorkflow}>Xuất</button>
             <button className="menu-action" title="Lưu workflow (Ctrl+S)" onClick={() => { void saveWorkflow(); }}>Lưu</button>
             <button className="menu-action" title="Lưu mới (Ctrl+Shift+S)" onClick={() => { void saveWorkflow(true); }}>Lưu mới</button>

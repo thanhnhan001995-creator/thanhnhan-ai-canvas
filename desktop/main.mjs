@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { isWorkflowDocumentPath, parseWorkflowDocument, serializeTessWorkflow, TESS_EXTENSION, workflowNameFromPath, workflowPathWithTessExtension } from "../shared/tess-document.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const appUrl = "http://localhost:3000";
@@ -11,6 +12,7 @@ const launcher = path.join(root, "support", "scripts", "dev-with-media.mjs");
 const preload = path.join(root, "desktop", "preload.cjs");
 const systemNode = path.join(process.env.ProgramFiles ?? "C:\\Program Files", "nodejs", "node.exe");
 const nodeExecutable = existsSync(systemNode) ? systemNode : process.execPath;
+const appIcon = path.join(root, "public", "tesseract.ico");
 let mainWindow = null;
 let localServer = null;
 let serverWasStartedHere = false;
@@ -48,21 +50,13 @@ function safeWorkflowName(value) {
   return String(value || "New workflow").replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").trim() || "New workflow";
 }
 
-function workflowNameFromPath(filePath) {
-  return path.basename(filePath).replace(/\.contentflow\.json$/i, "").replace(/\.json$/i, "").trim() || "New workflow";
-}
-
-function workflowPathWithJsonExtension(filePath) {
-  return path.extname(filePath).toLowerCase() === ".json" ? filePath : `${filePath}.json`;
-}
-
 function uniqueWorkflowPath(candidatePath, existingPath = null) {
   const candidate = path.resolve(candidatePath);
   const existing = existingPath ? path.resolve(existingPath) : null;
   if (existing && candidate.toLowerCase() === existing.toLowerCase()) return candidate;
   if (!existsSync(candidate)) return candidate;
   const directory = path.dirname(candidate);
-  const extension = path.extname(candidate) || ".json";
+  const extension = path.extname(candidate) || TESS_EXTENSION;
   const stem = path.basename(candidate, extension);
   for (let index = 2; ; index += 1) {
     const numbered = path.join(directory, `${stem} (${index})${extension}`);
@@ -70,8 +64,8 @@ function uniqueWorkflowPath(candidatePath, existingPath = null) {
   }
 }
 
-app.setName("Content Flow");
-app.setAppUserModelId("com.contentflow.desktop");
+app.setName("Tesseract");
+app.setAppUserModelId("com.nguyenthanhnhan.tesseract");
 
 if (!hasSingleInstanceLock) app.quit();
 
@@ -88,7 +82,7 @@ function startLocalServer() {
   serverWasStartedHere = true;
   localServer = spawn(nodeExecutable, [launcher, "start"], {
     cwd: root,
-    env: process.env,
+    env: nodeExecutable === process.execPath ? { ...process.env, ELECTRON_RUN_AS_NODE: "1" } : process.env,
     stdio: "ignore",
     windowsHide: true,
   });
@@ -101,12 +95,12 @@ async function ensureLocalServer() {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (await isServerReady()) return;
     if (localServer?.exitCode != null) {
-      throw new Error("Dịch vụ Content Flow đã dừng khi đang khởi động.");
+      throw new Error("Dịch vụ Tesseract đã dừng khi đang khởi động.");
     }
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
 
-  throw new Error("Content Flow khởi động quá lâu. Hãy thử lại sau.");
+  throw new Error("Tesseract khởi động quá lâu. Hãy thử lại sau.");
 }
 
 function stopLocalServer() {
@@ -120,7 +114,8 @@ function stopLocalServer() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    title: "Content Flow",
+    title: "Tesseract",
+    icon: appIcon,
     width: 1440,
     height: 920,
     minWidth: 1080,
@@ -206,24 +201,27 @@ ipcMain.handle("content-flow:open-workflow", async () => {
   const result = await dialog.showOpenDialog(mainWindow ?? undefined, {
     title: "Mở workflow",
     properties: ["openFile"],
-    filters: [{ name: "Content Flow workflow", extensions: ["json"] }],
+    filters: [
+      { name: "Tesseract workflow", extensions: ["tess"] },
+      { name: "Workflow JSON cũ", extensions: ["json"] },
+    ],
   });
   if (result.canceled || !result.filePaths[0]) return { canceled: true };
   const filePath = result.filePaths[0];
   try {
-    return { canceled: false, path: filePath, workflow: JSON.parse(await readFile(filePath, "utf8")) };
+    return { canceled: false, path: filePath, workflow: parseWorkflowDocument(await readFile(filePath, "utf8")) };
   } catch (error) {
     return { canceled: false, error: error instanceof Error ? `Không thể mở workflow: ${error.message}` : "Không thể mở workflow." };
   }
 });
 
 ipcMain.handle("content-flow:open-recent-workflow", async (_event, requestedPath) => {
-  if (typeof requestedPath !== "string" || path.extname(requestedPath).toLowerCase() !== ".json") {
+  if (typeof requestedPath !== "string" || !isWorkflowDocumentPath(requestedPath)) {
     return { canceled: false, error: "Đường dẫn workflow gần đây không hợp lệ." };
   }
   const filePath = path.resolve(requestedPath);
   try {
-    return { canceled: false, path: filePath, workflow: JSON.parse(await readFile(filePath, "utf8")) };
+    return { canceled: false, path: filePath, workflow: parseWorkflowDocument(await readFile(filePath, "utf8")) };
   } catch (error) {
     return { canceled: false, error: error instanceof Error ? `Không thể mở workflow gần đây: ${error.message}` : "Không thể mở workflow gần đây." };
   }
@@ -239,20 +237,20 @@ ipcMain.handle("content-flow:save-workflow", async (_event, request = {}) => {
     if (!targetPath) {
       const result = await dialog.showSaveDialog(mainWindow ?? undefined, {
         title: "Lưu workflow",
-        defaultPath: `${defaultName}.json`,
-        filters: [{ name: "Content Flow workflow", extensions: ["json"] }],
+        defaultPath: `${defaultName}${TESS_EXTENSION}`,
+        filters: [{ name: "Tesseract workflow", extensions: ["tess"] }],
       });
       if (result.canceled || !result.filePath) return { canceled: true };
       targetPath = result.filePath;
     } else if (workflowNameFromPath(targetPath) !== defaultName) {
-      targetPath = path.join(path.dirname(targetPath), `${defaultName}.json`);
+      targetPath = path.join(path.dirname(targetPath), `${defaultName}${TESS_EXTENSION}`);
     }
-    targetPath = uniqueWorkflowPath(workflowPathWithJsonExtension(targetPath), request.saveAs ? null : currentPath);
+    targetPath = uniqueWorkflowPath(workflowPathWithTessExtension(targetPath), request.saveAs ? null : currentPath);
     const persistedName = workflowNameFromPath(targetPath);
     const persistedWorkflow = workflow && typeof workflow === "object" && !Array.isArray(workflow)
       ? { ...workflow, name: persistedName }
       : workflow;
-    await writeFile(targetPath, JSON.stringify(persistedWorkflow, null, 2), "utf8");
+    await writeFile(targetPath, serializeTessWorkflow(persistedWorkflow), "utf8");
     if (!request.saveAs && currentPath && currentPath.toLowerCase() !== targetPath.toLowerCase() && existsSync(currentPath)) {
       await unlink(currentPath);
     }
@@ -268,8 +266,8 @@ app.whenReady().then(async () => {
     await ensureLocalServer();
     await createWindow();
   } catch (error) {
-    const details = error instanceof Error ? error.message : "Không thể khởi động Content Flow.";
-    await dialog.showMessageBox({ type: "error", title: "Content Flow", message: details });
+    const details = error instanceof Error ? error.message : "Không thể khởi động Tesseract.";
+    await dialog.showMessageBox({ type: "error", title: "Tesseract", message: details });
     app.quit();
   }
 });

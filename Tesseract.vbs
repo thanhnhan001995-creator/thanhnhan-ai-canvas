@@ -7,7 +7,7 @@ root = fileSystem.GetParentFolderName(WScript.ScriptFullName)
 electron = root & "\node_modules\electron\dist\electron.exe"
 
 If Not fileSystem.FileExists(electron) Then
-  MsgBox "Chưa tìm thấy bộ chạy Content Flow Desktop. Hãy chạy npm install trong thư mục app rồi mở lại.", vbCritical, "Content Flow"
+  MsgBox "Chưa tìm thấy bộ chạy Tesseract. Hãy chạy npm install trong thư mục app rồi mở lại.", vbCritical, "Tesseract"
   WScript.Quit 1
 End If
 

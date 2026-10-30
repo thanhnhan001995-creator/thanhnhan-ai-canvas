@@ -1670,6 +1670,14 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm test` — build thành công, **42/42** bài kiểm tra đạt.
 
+## 2026-10-30 +07:00 — Định dạng Tesseract và đóng gói Windows
+
+- Đổi workflow mới sang tệp `.tess` có header `TESSERACT/1` và envelope định dạng riêng; app vẫn nhận workflow JSON cũ để người dùng mở rồi lưu chuyển đổi an toàn.
+- Thêm icon Tesseract dạng SVG và `.ico` đa kích cỡ, dùng cho metadata web, cửa sổ Electron và file association `.tess` khi cài ứng dụng Windows.
+- Đổi nhận diện desktop thành Tesseract, thêm cấu hình `electron-builder` tạo ứng dụng cài đặt với file thực thi `Tesseract.exe`; script đóng gói đăng ký phần mở rộng `.tess`.
+
+**Kiểm tra:** `npm test` — build thành công, **44/44** bài kiểm tra đạt.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 

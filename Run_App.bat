@@ -2,9 +2,9 @@
 setlocal
 cd /d "%~dp0"
 
-set "desktopLauncher=%~dp0Content Flow Desktop.vbs"
+set "desktopLauncher=%~dp0Tesseract.vbs"
 if not exist "%desktopLauncher%" (
-  echo Khong tim thay Content Flow Desktop.
+  echo Khong tim thay Tesseract.
   pause
   exit /b 1
 )

@@ -1,5 +1,5 @@
 {
-  "name": "content-flow",
+  "name": "tesseract",
   "version": "0.1.0",
   "private": true,
   "main": "desktop/main.mjs",
@@ -15,44 +15,93 @@
     "start:web": "vinext start",
     "desktop": "electron .",
     "desktop:debug": "electron --enable-logging .",
-    "test": "npm run build && node --test support/tests/rendered-html.test.mjs support/tests/content-engine.test.mjs",
+    "generate:icon": "node support/scripts/generate-tesseract-icon.mjs",
+    "package:win": "npm run build && npm run generate:icon && electron-builder --win nsis --x64",
+    "test": "npm run build && node --test support/tests/rendered-html.test.mjs support/tests/content-engine.test.mjs support/tests/tess-document.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "@cloudflare/vite-plugin": "1.37.1",
     "@huggingface/transformers": "^4.3.1",
+    "@tailwindcss/postcss": "4.2.1",
+    "@vitejs/plugin-react": "6.0.2",
+    "@vitejs/plugin-rsc": "0.5.26",
     "@xyflow/react": "^12.11.2",
     "drizzle-orm": "0.45.2",
     "mammoth": "^1.12.0",
     "pdfjs-dist": "^6.2.108",
     "react": "19.2.6",
     "react-dom": "19.2.6",
+    "react-server-dom-webpack": "19.2.6",
+    "tailwindcss": "4.2.1",
+    "vinext": "1.0.0-beta.2",
+    "vite": "8.0.13",
     "wavefile": "^11.0.0"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.37.1",
     "@eslint/js": "9.39.4",
     "@next/eslint-plugin-next": "16.2.6",
-    "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
-    "@vitejs/plugin-react": "6.0.2",
-    "@vitejs/plugin-rsc": "0.5.26",
     "drizzle-kit": "0.31.10",
     "electron": "^44.7.0",
+    "electron-builder": "^26.18.0",
     "eslint": "9.39.4",
     "eslint-plugin-jsx-a11y": "6.10.2",
     "eslint-plugin-react": "7.37.5",
     "eslint-plugin-react-hooks": "7.1.1",
     "globals": "16.4.0",
-    "react-server-dom-webpack": "19.2.6",
-    "tailwindcss": "4.2.1",
     "typescript": "5.9.3",
     "typescript-eslint": "8.59.3",
-    "vinext": "1.0.0-beta.2",
-    "vite": "8.0.13",
     "wrangler": "4.92.0"
+  },
+  "build": {
+    "appId": "com.nguyenthanhnhan.tesseract",
+    "productName": "Tesseract",
+    "asar": false,
+    "directories": {
+      "output": "release",
+      "buildResources": "public"
+    },
+    "files": [
+      "app/**/*",
+      "data/db/**/*",
+      "data/drizzle/**/*",
+      "desktop/**/*",
+      "dist/**/*",
+      "platform/**/*",
+      "public/**/*",
+      "shared/**/*",
+      "support/**/*",
+      "route.ts",
+      "next.config.ts",
+      "postcss.config.mjs",
+      "tsconfig.json",
+      "vite.config.ts"
+    ],
+    "win": {
+      "target": ["nsis"],
+      "icon": "public/tesseract.ico",
+      "executableName": "Tesseract"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "artifactName": "Tesseract-Setup-${version}.${ext}"
+    },
+    "fileAssociations": [
+      {
+        "ext": "tess",
+        "name": "Tesseract workflow",
+        "description": "Tesseract workflow",
+        "icon": "tesseract.ico"
+      }
+    ]
   },
   "type": "module"
 }

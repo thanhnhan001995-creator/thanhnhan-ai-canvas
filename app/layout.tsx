@@ -13,11 +13,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Content Flow — Trình dựng nội dung bằng node",
-  description: "Xây dựng dây chuyền sản xuất nội dung, hình ảnh và video bằng giao diện node trực quan.",
+  title: "Tesseract — Điều phối tác vụ AI bằng node",
+  description: "Thiết kế, chạy và kiểm tra các tác vụ AI bằng workflow node có thể theo dõi.",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: "/tesseract-icon.svg",
+    shortcut: "/tesseract-icon.svg",
   },
 };
 

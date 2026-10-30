@@ -14,14 +14,14 @@ async function render() {
   );
 }
 
-test("server-renders the Content Flow application", async () => {
+test("server-renders the Tesseract application", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /Content Flow/);
-  assert.match(html, /Trình dựng nội dung bằng node/);
+  assert.match(html, /Tesseract/);
+  assert.match(html, /Điều phối tác vụ AI bằng node/);
   assert.match(html, /Chạy workflow/);
   assert.doesNotMatch(html, /codex-preview/);
 });
@@ -40,8 +40,10 @@ test("defines typed workflow nodes and local persistence", async () => {
   assert.match(page, /content-flow-workspace-v5/);
   assert.match(page, /useState\("New workflow"\)/);
   assert.match(page, /aria-label="Tên workflow"/);
-  assert.match(page, /anchor\.download = `\$\{safeFileName\}\.json`/);
-  assert.match(page, /file\.name\.replace/);
+  assert.match(page, /anchor\.download = `\$\{safeFileName\}\.tess`/);
+  assert.match(page, /serializeTessWorkflow/);
+  assert.match(page, /parseWorkflowDocument/);
+  assert.match(page, /workflowNameFromPath\(file\.name\)/);
   assert.match(page, /executeWorkflowNode/);
   assert.match(page, /Sao chép output/);
   assert.match(page, /navigator\.clipboard\?\.writeText/);
@@ -221,7 +223,7 @@ assert.match(css, /\.quick-node-card strong \{[\s\S]*?-webkit-line-clamp: 2/);
   assert.match(page, /saveWorkflow\(true\)/);
   assert.match(page, /Ctrl\+Shift\+S/);
   assert.match(page, /contentFlowDesktop\.saveWorkflow/);
-  assert.match(page, /function workflowNameFromPath\(filePath: string\)/);
+  assert.match(page, /workflowNameFromPath \} from "\.\.\/shared\/tess-document\.mjs"/);
   assert.match(page, /syncRecentWorkflowPath/);
   assert.match(page, /const savedName = workflowNameFromPath\(result\.path\)/);
   assert.match(page, /contentFlowDesktop\?\.openWorkflow/);

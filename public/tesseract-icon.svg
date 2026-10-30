@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title>Tesseract</title>
+  <defs>
+    <linearGradient id="tile" x1="24" y1="20" x2="228" y2="236" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#b9a8ff"/>
+      <stop offset=".43" stop-color="#785cff"/>
+      <stop offset="1" stop-color="#3721a6"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="72" y1="63" x2="187" y2="193" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f3f0ff" stop-opacity=".95"/>
+      <stop offset="1" stop-color="#a78bfa" stop-opacity=".2"/>
+    </linearGradient>
+  </defs>
+  <rect x="14" y="14" width="228" height="228" rx="58" fill="#0b1020"/>
+  <rect x="18" y="18" width="220" height="220" rx="54" fill="url(#tile)"/>
+  <path d="M128 44 195 82v75l-67 39-67-39V82z" fill="#151035" fill-opacity=".52" stroke="#f4f1ff" stroke-width="8" stroke-linejoin="round"/>
+  <path d="m128 44 44 25-44 26-44-26zm0 52 44 25v50l-44 25-44-25v-50z" fill="url(#glass)" stroke="#f4f1ff" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M84 69v52m88-52v52m-44-26v51" fill="none" stroke="#f4f1ff" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="128" cy="95" r="9" fill="#ffffff"/>
+</svg>
