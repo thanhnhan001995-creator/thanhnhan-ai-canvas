@@ -1686,6 +1686,13 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm test` — build thành công, **44/44** bài kiểm tra đạt. Đã cài installer, xác nhận registry `.tess` trỏ đến `tesseract-document.ico` và `Tesseract.exe` khởi động với server nội bộ HTTP 200.
 
+## 2026-10-31 +07:00 — Quy trình YCKT
+
+- Thống nhất dùng `YCKT.xlsx` làm sổ yêu cầu kỹ thuật: đề xuất phạm vi, đầu ra, trạng thái; chỉ triển khai khi kế hoạch được người dùng phê duyệt.
+- Bỏ qua `YCKT.xlsx` trong Git để đây luôn là tài liệu làm việc cục bộ, không bị stage hay push nhầm.
+
+**Kiểm tra:** `git check-ignore -v YCKT.xlsx` xác nhận quy tắc bỏ qua hoạt động.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 
