@@ -6,6 +6,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const mediaScript = path.join(root, "support", "media", "video-transcription-service.mjs");
 const vinextCli = path.join(root, "node_modules", "vinext", "dist", "cli.js");
 const runMode = process.argv[2] === "dev" ? "dev" : "start";
+const appPort = Number(process.env.TESSERACT_PORT || 3000);
 const children = new Set();
 let stopping = false;
 
@@ -55,7 +56,7 @@ try {
     start(mediaScript);
     await waitForMedia();
   }
-  start(vinextCli, [runMode]);
+  start(vinextCli, [runMode, "--port", String(appPort)]);
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
   stop(1);

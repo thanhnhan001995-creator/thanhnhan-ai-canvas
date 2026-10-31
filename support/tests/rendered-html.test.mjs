@@ -474,6 +474,18 @@ test("runs FFmpeg in the companion Node media service", async () => {
   assert.match(packageJson, /dev-with-media\.mjs/);
 });
 
+test("source Run_App uses a separate development server instead of stale dist", async () => {
+  const [main, launcher] = await Promise.all([
+    readFile(new URL("../../desktop/main.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/dev-with-media.mjs", import.meta.url), "utf8"),
+  ]);
+  assert.match(main, /const appPort = app\.isPackaged \? 3000 : 4318/);
+  assert.match(main, /app\.isPackaged \? "start" : "dev"/);
+  assert.match(main, /TESSERACT_PORT: String\(appPort\)/);
+  assert.match(launcher, /const appPort = Number\(process\.env\.TESSERACT_PORT \|\| 3000\)/);
+  assert.match(launcher, /\[runMode, "--port", String\(appPort\)\]/);
+});
+
 test("runtime AI calls require a key supplied by a workflow node, never .env", async () => {
   const [route, client, service, launcher, page] = await Promise.all([
     readFile(new URL("../../app/api/research/route.ts", import.meta.url), "utf8"),

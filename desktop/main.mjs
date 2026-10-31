@@ -7,7 +7,10 @@ import path from "node:path";
 import { isWorkflowDocumentPath, parseWorkflowDocument, prepareWorkflowForSave, serializeTessWorkflow, TESS_EXTENSION, workflowNameFromPath, workflowPathWithTessExtension } from "../shared/tess-document.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const appUrl = "http://localhost:3000";
+// Bản mở từ source dùng cổng riêng để không vô tình gắn vào server 3000
+// cũ (thường là dist cũ). Bản đóng gói chính thức vẫn giữ cổng 3000.
+const appPort = app.isPackaged ? 3000 : 4318;
+const appUrl = `http://localhost:${appPort}`;
 const launcher = path.join(root, "support", "scripts", "dev-with-media.mjs");
 const preload = path.join(root, "desktop", "preload.cjs");
 const systemNode = path.join(process.env.ProgramFiles ?? "C:\\Program Files", "nodejs", "node.exe");
@@ -80,9 +83,13 @@ async function isServerReady() {
 
 function startLocalServer() {
   serverWasStartedHere = true;
-  localServer = spawn(nodeExecutable, [launcher, "start"], {
+  localServer = spawn(nodeExecutable, [launcher, app.isPackaged ? "start" : "dev"], {
     cwd: root,
-    env: nodeExecutable === process.execPath ? { ...process.env, ELECTRON_RUN_AS_NODE: "1" } : process.env,
+    env: {
+      ...process.env,
+      TESSERACT_PORT: String(appPort),
+      ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
+    },
     stdio: "ignore",
     windowsHide: true,
   });

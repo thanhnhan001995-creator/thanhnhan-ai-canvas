@@ -1759,6 +1759,13 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm test` — build thành công, **54/54** bài kiểm tra đạt.
 
+## 2026-10-31 +07:00 — Run_App luôn chạy source mới
+
+- Xác định `Run_App.bat` trước đây mở Electron nhưng Electron dùng `vinext start`; server chỉ đọc `dist` đã build nên source mới có thể không xuất hiện sau khi mở lại.
+- Khi chạy từ thư mục source, launcher nay dùng `vinext dev` trên cổng `4318`, tách khỏi server cũ ở cổng `3000` và tự phản ánh source hiện tại. Bản Electron đóng gói vẫn dùng `vinext start` trên cổng `3000`, không thay đổi hành vi phát hành.
+
+**Kiểm tra:** `npm test` — build thành công, **55/55** bài kiểm tra đạt.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 
