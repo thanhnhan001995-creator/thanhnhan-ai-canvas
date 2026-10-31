@@ -1742,7 +1742,7 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 - Thêm checklist nghiệm thu thủ công tại `support/checklists/workflow-call-acceptance.md`: truyền dữ liệu qua Cổng vào/Cổng ra, interface thay đổi, vòng trước khi chạy, vòng phát sinh sau kiểm tra, file/tab không tồn tại, nhiều tab và hai giới hạn runtime.
 - Checklist nêu rõ đây là bản phát triển: không đóng gói hoặc cập nhật bản cài cho đến khi người dùng duyệt phát hành chính thức.
 
-**Kiểm tra:** `npm test` — build thành công, **53/53** bài kiểm tra đạt.
+**Kiểm tra:** `npm test` — build thành công, **54/54** bài kiểm tra đạt.
 
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
