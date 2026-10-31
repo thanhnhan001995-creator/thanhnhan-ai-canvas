@@ -1693,6 +1693,14 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `git check-ignore -v YCKT.xlsx` xác nhận quy tắc bỏ qua hoạt động.
 
+## 2026-10-31 +07:00 — REC-01: Hợp đồng workflow gọi lại
+
+- Mỗi workflow `.tess` mới có `workflowId` ổn định, được tạo một lần và giữ nguyên qua các lượt lưu, mở lại hoặc xuất tệp.
+- Định nghĩa interface phiên bản 1 được lưu cả trong envelope `.tess` lẫn workflow: danh sách cổng vào/cổng ra gồm ID, tên, kiểu dữ liệu, cờ bắt buộc và mô tả tùy chọn. Dữ liệu bị thiếu, sai kiểu hoặc trùng ID bị chặn ngay khi lưu/mở.
+- File `.tess` phiên bản cũ và JSON workflow cũ vẫn mở được; chỉ workflow mới/lần lưu mới mới nhận metadata ổn định. Desktop trả lại workflow đã chuẩn hóa để giao diện đồng bộ ID/interface sau khi lưu.
+
+**Kiểm tra:** `npm test` — build thành công, **45/45** bài kiểm tra đạt.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 

@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { isWorkflowDocumentPath, parseWorkflowDocument, serializeTessWorkflow, TESS_EXTENSION, workflowNameFromPath, workflowPathWithTessExtension } from "../shared/tess-document.mjs";
+import { isWorkflowDocumentPath, parseWorkflowDocument, prepareWorkflowForSave, serializeTessWorkflow, TESS_EXTENSION, workflowNameFromPath, workflowPathWithTessExtension } from "../shared/tess-document.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const appUrl = "http://localhost:3000";
@@ -248,13 +248,13 @@ ipcMain.handle("content-flow:save-workflow", async (_event, request = {}) => {
     targetPath = uniqueWorkflowPath(workflowPathWithTessExtension(targetPath), request.saveAs ? null : currentPath);
     const persistedName = workflowNameFromPath(targetPath);
     const persistedWorkflow = workflow && typeof workflow === "object" && !Array.isArray(workflow)
-      ? { ...workflow, name: persistedName }
+      ? prepareWorkflowForSave({ ...workflow, name: persistedName })
       : workflow;
     await writeFile(targetPath, serializeTessWorkflow(persistedWorkflow), "utf8");
     if (!request.saveAs && currentPath && currentPath.toLowerCase() !== targetPath.toLowerCase() && existsSync(currentPath)) {
       await unlink(currentPath);
     }
-    return { canceled: false, path: targetPath, name: persistedName };
+    return { canceled: false, path: targetPath, name: persistedName, workflow: persistedWorkflow };
   } catch (error) {
     return { canceled: false, error: error instanceof Error ? `Không thể lưu workflow: ${error.message}` : "Không thể lưu workflow." };
   }

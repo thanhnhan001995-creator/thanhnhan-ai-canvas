@@ -1,12 +1,33 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isWorkflowDocumentPath, parseWorkflowDocument, serializeTessWorkflow, workflowNameFromPath, workflowPathWithTessExtension } from "../../shared/tess-document.mjs";
+import { isWorkflowDocumentPath, parseWorkflowDocument, prepareWorkflowForSave, serializeTessWorkflow, validateWorkflowInterface, workflowNameFromPath, workflowPathWithTessExtension } from "../../shared/tess-document.mjs";
 
 test("Tesseract saves a distinct .tess container and reads it back", () => {
   const workflow = { version: 6, name: "Kế hoạch quý 4", nodes: [], edges: [], groups: [] };
   const serialized = serializeTessWorkflow(workflow);
   assert.match(serialized, /^TESSERACT\/1\n/);
-  assert.deepEqual(parseWorkflowDocument(serialized), workflow);
+  const parsed = parseWorkflowDocument(serialized);
+  assert.equal(parsed.name, workflow.name);
+  assert.match(parsed.workflowId, /^workflow-/);
+  assert.deepEqual(parsed.workflowInterface, { version: 1, inputs: [], outputs: [] });
+});
+
+test("Tesseract persists a stable validated workflow interface", () => {
+  const workflow = prepareWorkflowForSave({
+    version: 6,
+    name: "Workflow có cổng",
+    workflowId: "workflow-stable-id",
+    workflowInterface: {
+      version: 1,
+      inputs: [{ id: "brief", name: "Brief", type: "Text", required: true }],
+      outputs: [{ id: "result", name: "Kết quả", type: "Text" }],
+    },
+    nodes: [],
+    edges: [],
+  });
+  assert.equal(parseWorkflowDocument(serializeTessWorkflow(workflow)).workflowId, "workflow-stable-id");
+  assert.equal(validateWorkflowInterface({ inputs: [{ id: "x", name: "X", type: "Text" }], outputs: [] }).valid, true);
+  assert.equal(validateWorkflowInterface({ inputs: [{ id: "x", name: "", type: "Text" }], outputs: [] }).valid, false);
 });
 
 test("Tesseract keeps legacy JSON readable but writes every new path as .tess", () => {

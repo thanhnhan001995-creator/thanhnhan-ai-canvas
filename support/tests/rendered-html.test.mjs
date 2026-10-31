@@ -160,7 +160,7 @@ test("defines typed workflow nodes and local persistence", async () => {
   assert.match(page, /toggleWorkflowGroupVisibility/);
   assert.match(page, /className="outliner-resizer"/);
   assert.match(page, /const resizeOutliner =/);
-  assert.match(page, /version: 6, name, nodes, edges, groups/);
+  assert.match(page, /version: 6, name, workflowId, workflowInterface, nodes, edges, groups/);
   assert.match(css, /\.workflow-group-head/);
   assert.match(css, /\.outliner-resizer/);
   assert.match(css, /\.workflow-group\.collapsed/);
@@ -225,7 +225,7 @@ assert.match(css, /\.quick-node-card strong \{[\s\S]*?-webkit-line-clamp: 2/);
   assert.match(page, /saveWorkflow\(true\)/);
   assert.match(page, /Ctrl\+Shift\+S/);
   assert.match(page, /contentFlowDesktop\.saveWorkflow/);
-  assert.match(page, /workflowNameFromPath \} from "\.\.\/shared\/tess-document\.mjs"/);
+  assert.match(page, /createWorkflowId, parseWorkflowDocument, prepareWorkflowForSave, serializeTessWorkflow, workflowNameFromPath \} from "\.\.\/shared\/tess-document\.mjs"/);
   assert.match(page, /syncRecentWorkflowPath/);
   assert.match(page, /const savedName = workflowNameFromPath\(result\.path\)/);
   assert.match(page, /contentFlowDesktop\?\.openWorkflow/);

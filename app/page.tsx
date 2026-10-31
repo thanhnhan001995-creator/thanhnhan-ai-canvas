@@ -34,7 +34,7 @@ import { beginLocalMediaWorkflowRun, controlLocalMediaWorkflow, endLocalMediaWor
 import { hasNodeExecutor } from "./node-execution.ts";
 import { currentOpenAiModel, getAiModelCapabilities, replacementForRetiredOpenAiModel, type CapabilityState } from "./ai-model-capabilities";
 import { nextNodeName, nodeFamilyOf } from "./node-identity";
-import { parseWorkflowDocument, serializeTessWorkflow, workflowNameFromPath } from "../shared/tess-document.mjs";
+import { createWorkflowId, parseWorkflowDocument, prepareWorkflowForSave, serializeTessWorkflow, workflowNameFromPath } from "../shared/tess-document.mjs";
 
 declare global {
   interface Window {
@@ -42,7 +42,7 @@ declare global {
       pickFolder: () => Promise<string | null>;
       pickFiles: (request: { accept?: string; multiple?: boolean }) => Promise<{ canceled: boolean; paths?: string[]; error?: string }>;
       readFiles: (paths: string[]) => Promise<{ files?: Array<{ name: string; type: string; data?: Uint8Array; path?: string; size?: number; pathOnly?: boolean }>; error?: string }>;
-      saveWorkflow: (request: { workflow: unknown; currentPath: string | null; defaultName: string; saveAs: boolean }) => Promise<{ canceled: boolean; path?: string; error?: string }>;
+      saveWorkflow: (request: { workflow: unknown; currentPath: string | null; defaultName: string; saveAs: boolean }) => Promise<{ canceled: boolean; path?: string; workflow?: unknown; error?: string }>;
       openWorkflow: () => Promise<{ canceled: boolean; path?: string; workflow?: unknown; error?: string }>;
       openRecentWorkflow: (filePath: string) => Promise<{ canceled: boolean; path?: string; workflow?: unknown; error?: string }>;
       onCloseCanvas: (callback: () => void) => () => void;
@@ -2717,6 +2717,8 @@ function WorkflowApp() {
   const runtimeFilesRef = useRef<RuntimeFileStore>(new Map());
   const [workflowName, setWorkflowName] = useState("New workflow");
   const [workflowPath, setWorkflowPath] = useState<string | null>(null);
+  const [workflowId, setWorkflowId] = useState(() => createWorkflowId());
+  const [workflowInterface, setWorkflowInterface] = useState<unknown>(undefined);
   const [nodes, setNodes, onNodesChange] = useNodesState<ContentFlowNode>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -3184,11 +3186,14 @@ function WorkflowApp() {
     const saved = localStorage.getItem("content-flow-workspace-v5");
     if (!saved) return;
     try {
-      const parsed = JSON.parse(saved) as { name?: string; filePath?: string; nodes: ContentFlowNode[]; edges: Edge[]; groups?: unknown };
+      const parsed = JSON.parse(saved) as { name?: string; filePath?: string; workflowId?: unknown; workflowInterface?: unknown; nodes: ContentFlowNode[]; edges: Edge[]; groups?: unknown };
       if (Array.isArray(parsed.nodes) && Array.isArray(parsed.edges)) {
         const filePath = typeof parsed.filePath === "string" ? parsed.filePath : null;
         setWorkflowName(filePath ? workflowNameFromPath(filePath) : parsed.name?.trim() || "New workflow");
         setWorkflowPath(filePath);
+        const restoredWorkflowId = typeof parsed.workflowId === "string" && parsed.workflowId.trim() ? parsed.workflowId : createWorkflowId();
+        setWorkflowId(restoredWorkflowId);
+        setWorkflowInterface(parsed.workflowInterface);
         const repairedWorkflow = repairDuplicateWorkflowNodeIds(parsed.nodes);
         const refreshedNodes = repairedWorkflow.nodes.map(refreshNodeAppearance);
         const normalizedEdges = normalizeWorkflowEdges(parsed.edges, repairedWorkflow.nodes, refreshedNodes);
@@ -3233,7 +3238,7 @@ function WorkflowApp() {
 
   const saveWorkflow = useCallback(async (saveAs = false) => {
     const name = workflowName.trim() || "New workflow";
-    const workflow = { version: 6, name, nodes, edges, groups: workflowGroups };
+    const workflow = prepareWorkflowForSave({ version: 6, name, workflowId, workflowInterface, nodes, edges, groups: workflowGroups });
     setWorkflowName(name);
     if (!window.contentFlowDesktop) {
       setNotice("Tính năng Lưu tệp chỉ dùng được trong ứng dụng Content Flow Desktop.");
@@ -3251,14 +3256,19 @@ function WorkflowApp() {
       return false;
     }
     const savedName = workflowNameFromPath(result.path);
-    const savedWorkflow = { ...workflow, name: savedName };
+    const returnedWorkflow = result.workflow && typeof result.workflow === "object" && !Array.isArray(result.workflow)
+      ? result.workflow as { workflowId?: unknown; workflowInterface?: unknown }
+      : workflow;
+    const savedWorkflow = { ...workflow, ...returnedWorkflow, name: savedName };
     setWorkflowName(savedName);
+    setWorkflowId(typeof savedWorkflow.workflowId === "string" ? savedWorkflow.workflowId : workflowId);
+    setWorkflowInterface(savedWorkflow.workflowInterface);
     setWorkflowPath(result.path);
     syncRecentWorkflowPath(workflowPath, result.path, savedName);
     localStorage.setItem("content-flow-workspace-v5", JSON.stringify({ ...savedWorkflow, filePath: result.path }));
     setNotice(saveAs ? `Đã lưu workflow mới: ${result.path}` : `Đã lưu workflow: ${result.path}`);
     return true;
-  }, [edges, nodes, syncRecentWorkflowPath, workflowGroups, workflowName, workflowPath]);
+  }, [edges, nodes, syncRecentWorkflowPath, workflowGroups, workflowId, workflowInterface, workflowName, workflowPath]);
 
   const rememberRecentWorkflow = useCallback((filePath: string, name: string) => {
     const next = [
@@ -3277,7 +3287,7 @@ function WorkflowApp() {
 
   const loadWorkflowData = useCallback((value: unknown, fallbackName: string, filePath: string | null) => {
     try {
-      const parsed = value as { name?: string; nodes: ContentFlowNode[]; edges: Edge[]; groups?: unknown };
+      const parsed = value as { name?: string; workflowId?: unknown; workflowInterface?: unknown; nodes: ContentFlowNode[]; edges: Edge[]; groups?: unknown };
       if (!Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) throw new Error("invalid");
       const name = (filePath ? fallbackName : parsed.name?.trim()) || fallbackName || "New workflow";
       const repairedWorkflow = repairDuplicateWorkflowNodeIds(parsed.nodes);
@@ -3289,11 +3299,14 @@ function WorkflowApp() {
       runtimeFilesRef.current.clear();
       setWorkflowName(name);
       setWorkflowPath(filePath);
+      const loadedWorkflowId = typeof parsed.workflowId === "string" && parsed.workflowId.trim() ? parsed.workflowId : createWorkflowId();
+      setWorkflowId(loadedWorkflowId);
+      setWorkflowInterface(parsed.workflowInterface);
       setNodes(visibleNodes);
       setEdges(normalizedEdges);
       setWorkflowGroups(groups);
       resetCanvasHistory(visibleNodes, normalizedEdges, null, groups);
-      localStorage.setItem("content-flow-workspace-v5", JSON.stringify({ version: 6, name, nodes: visibleNodes, edges: normalizedEdges, groups, filePath }));
+      localStorage.setItem("content-flow-workspace-v5", JSON.stringify({ version: 6, name, workflowId: loadedWorkflowId, workflowInterface: parsed.workflowInterface, nodes: visibleNodes, edges: normalizedEdges, groups, filePath }));
       if (filePath) rememberRecentWorkflow(filePath, name);
       // Mọi nguồn mở workflow (gần đây, hộp tìm file, import) đều phải đưa
       // canvas trở lại. Nếu không, dữ liệu đã nạp nhưng vẫn bị màn hình đóng che.
@@ -4376,6 +4389,8 @@ function WorkflowApp() {
     rememberCanvasChange();
     setWorkflowName("New workflow");
     setWorkflowPath(null);
+    setWorkflowId(createWorkflowId());
+    setWorkflowInterface(undefined);
     runtimeFilesRef.current.clear();
     setNodes(initialNodes);
     setEdges(initialEdges);
@@ -4392,7 +4407,10 @@ function WorkflowApp() {
     const name = workflowName.trim() || "New workflow";
     const safeFileName = name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").replace(/[. ]+$/g, "").trim() || "New workflow";
     setWorkflowName(name);
-    const blob = new Blob([serializeTessWorkflow({ version: 6, name, nodes, edges, groups: workflowGroups })], { type: "application/x-tesseract-workflow" });
+    const workflow = prepareWorkflowForSave({ version: 6, name, workflowId, workflowInterface, nodes, edges, groups: workflowGroups });
+    setWorkflowId(workflow.workflowId);
+    setWorkflowInterface(workflow.workflowInterface);
+    const blob = new Blob([serializeTessWorkflow(workflow)], { type: "application/x-tesseract-workflow" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
