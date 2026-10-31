@@ -35,6 +35,7 @@ import { hasNodeExecutor } from "./node-execution.ts";
 import { currentOpenAiModel, getAiModelCapabilities, replacementForRetiredOpenAiModel, type CapabilityState } from "./ai-model-capabilities";
 import { nextNodeName, nodeFamilyOf } from "./node-identity";
 import { createWorkflowId, normalizeWorkflowInterface, parseWorkflowDocument, prepareWorkflowForSave, serializeTessWorkflow, workflowNameFromPath } from "../shared/tess-document.mjs";
+import { findWorkflowReferenceCycles } from "../shared/workflow-recursion.mjs";
 
 declare global {
   interface Window {
@@ -2999,7 +3000,7 @@ function WorkflowApp() {
   const [attentionEditorOpen, setAttentionEditorOpen] = useState(false);
   const { screenToFlowPosition, fitView } = useReactFlow();
   const idCounter = useRef(20);
-  const checkWorkflowRef = useRef<() => WorkflowCheckIssue[]>(() => []);
+  const checkWorkflowRef = useRef<() => void>(() => undefined);
   const toggleWorkflowRunRef = useRef<() => void>(() => undefined);
   const stopWorkflowRef = useRef<() => void>(() => undefined);
   const runControlRef = useRef<{ paused: boolean; stopped: boolean; resume?: () => void }>({ paused: false, stopped: false });
@@ -4561,6 +4562,10 @@ function WorkflowApp() {
       if (!loaded?.workflow || !loaded.path || loaded.error) throw new Error(loaded?.error || `Không thể đọc workflow cần gọi: ${configuredPath}`);
       const document = loaded.workflow as WorkflowDocumentLike & { workflowId?: unknown; workflowInterface?: unknown };
       if (!Array.isArray(document.nodes) || !Array.isArray(document.edges) || typeof document.workflowId !== "string") throw new Error(`Workflow cần gọi “${workflowNameFromPath(configuredPath)}” không hợp lệ hoặc chưa được lưu bằng Tesseract.`);
+      const recursiveAt = context.stack.indexOf(loaded.path);
+      if (recursiveAt >= 0) {
+        throw new Error(`Đệ quy vòng không an toàn: ${[...context.stack.slice(recursiveAt), loaded.path].join(" → ")}. Đã dừng để tránh chạy vô tận.`);
+      }
       const expectedInterface = extended.data.calledWorkflow?.workflowInterface;
       const actualInterface = normalizeWorkflowInterfaceShape(document.workflowInterface);
       if (expectedInterface && JSON.stringify(expectedInterface) !== JSON.stringify(actualInterface)) {
@@ -4801,13 +4806,96 @@ function WorkflowApp() {
       return [{ nodeId: selectedId ?? nodes[0]?.id ?? "workflow", beacon: "error", message }];
     }
   }, [edges, nodes, selectedId, setNodes]);
+
+  const checkWorkflowRecursion = useCallback(async (): Promise<WorkflowCheckIssue[]> => {
+    type RecursionDocument = WorkflowDocumentLike & { workflowId: string; workflowInterface?: unknown; name?: string; filePath?: string | null };
+    type RecursionTarget = { key: string; label: string; document: RecursionDocument };
+    const currentDocument: RecursionDocument = {
+      workflowId,
+      workflowInterface: workflowInterfaceFromNodes(nodes),
+      name: workflowName,
+      filePath: workflowPath,
+      nodes,
+      edges,
+    };
+    const openDocuments = new Map<string, RecursionDocument>(workflowTabs.map((tab) => [tab.id, {
+      workflowId: tab.workflowId,
+      workflowInterface: tab.workflowInterface,
+      name: tab.name,
+      filePath: tab.filePath,
+      nodes: tab.nodes,
+      edges: tab.edges,
+    }]));
+    openDocuments.set(activeWorkflowTabId, currentDocument);
+    const issues: WorkflowCheckIssue[] = [];
+    const resolveTarget = async (callNode: WorkflowDocumentLike["nodes"][number]): Promise<RecursionTarget | null> => {
+      const raw = callNode as typeof callNode & { data: { calledWorkflow?: CalledWorkflowReference; config?: Record<string, FieldValue> } };
+      const reference = raw.data.calledWorkflow;
+      const configuredPath = reference?.path ?? filePathsFromConfig(raw.data.config?.workflowPathPaths)[0];
+      const openTabId = reference?.source === "open-tab"
+        ? reference.tabId ?? String(raw.data.config?.openWorkflowTabId ?? "")
+        : configuredPath?.startsWith("open-tab://") ? configuredPath.slice("open-tab://".length) : "";
+      if (openTabId) {
+        const target = openDocuments.get(openTabId);
+        if (!target) throw new Error("Tab workflow được gọi đã đóng hoặc không còn tồn tại.");
+        return { key: target.workflowId, label: target.name || "Workflow đang mở", document: target };
+      }
+      if (reference?.source === "current" || configuredPath === `current://${workflowId}`) {
+        return { key: currentDocument.workflowId, label: currentDocument.name || "Workflow hiện tại", document: currentDocument };
+      }
+      if (!configuredPath) throw new Error("chưa chọn workflow cần gọi.");
+      const loaded = await window.contentFlowDesktop?.readWorkflowAtPath(configuredPath);
+      if (!loaded?.workflow || loaded.error) throw new Error(loaded?.error || `không thể đọc “${configuredPath}”.`);
+      const document = loaded.workflow as RecursionDocument;
+      if (!Array.isArray(document.nodes) || !Array.isArray(document.edges) || !document.workflowId) throw new Error(`workflow “${workflowNameFromPath(configuredPath)}” không hợp lệ hoặc chưa được lưu bằng Tesseract.`);
+      return { key: document.workflowId, label: workflowNameFromPath(loaded.path ?? configuredPath), document: { ...document, filePath: loaded.path ?? configuredPath } };
+    };
+    const root: RecursionTarget = { key: currentDocument.workflowId, label: currentDocument.name || "Workflow hiện tại", document: currentDocument };
+    try {
+      const cycles = await findWorkflowReferenceCycles(root, {
+        getKey: (target) => target.key,
+        getLabel: (target) => target.label,
+        getCalls: (target) => target.document.nodes.filter((node) => nodeFamilyOf(node as ContentFlowNode) === "Gọi workflow" && !node.data.paused),
+        resolveTarget,
+      });
+      for (const cycle of cycles) {
+        const callNode = cycle.originCall;
+        issues.push({
+          nodeId: callNode.id,
+          beacon: "error",
+          message: `Đệ quy vòng không an toàn: ${cycle.chain.join(" → ")}. Hãy ngắt một node Gọi workflow hoặc bổ sung điều kiện dừng trước khi chạy.`,
+        });
+      }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "không thể đọc workflow được gọi.";
+      issues.push({ nodeId: root.document.nodes.find((node) => nodeFamilyOf(node as ContentFlowNode) === "Gọi workflow")?.id ?? "workflow", beacon: "error", message: `Không thể kiểm tra đệ quy: ${detail}` });
+    }
+    if (!issues.length) return [];
+    const issueNodes = new Set(issues.map((issue) => issue.nodeId));
+    setWorkflowCheck((current) => [...current.filter((issue) => !issue.message.startsWith("Đệ quy vòng") && !issue.message.startsWith("Không thể kiểm tra đệ quy")), ...issues]);
+    setNodes((current) => current.map((node) => issueNodes.has(node.id)
+      ? { ...node, data: { ...node.data, beacon: "error" } }
+      : node));
+    setWorkflowCheckSummary({ message: `Không thể chạy workflow: phát hiện ${issues.length} vòng/đích gọi không an toàn.`, beacon: "error" });
+    setNotice(issues[0].message);
+    if (issues[0]?.nodeId) setSelectedId(issues[0].nodeId);
+    return issues;
+  }, [activeWorkflowTabId, edges, nodes, workflowId, workflowName, workflowPath, workflowTabs]);
+
+  const checkWorkflowWithRecursion = useCallback(async (): Promise<WorkflowCheckIssue[]> => {
+    const basicIssues = checkWorkflow();
+    if (basicIssues.length) return basicIssues;
+    const recursionIssues = await checkWorkflowRecursion();
+    if (!recursionIssues.length) setNotice(`Đã kiểm tra ${nodes.length} node: Tất cả sẵn sàng, không có vòng gọi workflow.`);
+    return recursionIssues;
+  }, [checkWorkflow, checkWorkflowRecursion, nodes.length]);
   // Phím tắt được đăng ký trước khi hàm kiểm tra được khởi tạo; ref luôn trỏ
   // tới dữ liệu canvas hiện tại, không giữ closure cũ sau khi workflow đổi.
-  checkWorkflowRef.current = checkWorkflow;
+  checkWorkflowRef.current = () => { void checkWorkflowWithRecursion(); };
 
   const runWorkflow = async () => {
     if (runState !== "idle") return;
-    if (checkWorkflow().length) return;
+    if ((await checkWorkflowWithRecursion()).length) return;
     resetAiTokenUsage();
     const localMediaRunId = crypto.randomUUID();
     beginLocalMediaWorkflowRun(localMediaRunId);
@@ -5184,7 +5272,7 @@ function WorkflowApp() {
             <div className="menu-group">
               <button aria-expanded={openMenu === "workflow"} onClick={() => setOpenMenu((current) => current === "workflow" ? null : "workflow")}>Workflow</button>
               {openMenu === "workflow" && <div className="menu-popover" role="menu">
-                <button disabled={canvasClosed} onClick={() => { setOpenMenu(null); checkWorkflow(); }}><span>Kiểm tra workflow</span><kbd>Ctrl+E</kbd></button>
+                <button disabled={canvasClosed} onClick={() => { setOpenMenu(null); void checkWorkflowWithRecursion(); }}><span>Kiểm tra workflow</span><kbd>Ctrl+E</kbd></button>
                 <button disabled={canvasClosed} onClick={() => { setOpenMenu(null); toggleWorkflowRun(); }}><span>{runState === "idle" ? "Chạy workflow" : runState === "paused" ? "Tiếp tục workflow" : "Tạm dừng workflow"}</span><kbd>Ctrl+R</kbd></button>
                 <button onClick={() => { setOpenMenu(null); stopWorkflow(); }} disabled={canvasClosed || !running}><span>Dừng workflow</span><kbd>Ctrl+T</kbd></button>
                 <button disabled={canvasClosed} onClick={() => { setOpenMenu(null); toggleSelectedNodePause(); }}><span>Tạm ngưng/bật node đã chọn</span><kbd>Ctrl+P</kbd></button>
@@ -5230,7 +5318,7 @@ function WorkflowApp() {
             <button className="menu-action" onClick={exportWorkflow}>Xuất</button>
             <button className="menu-action" title="Lưu workflow (Ctrl+S)" onClick={() => { void saveWorkflow(); }}>Lưu</button>
             <button className="menu-action" title="Lưu mới (Ctrl+Shift+S)" onClick={() => { void saveWorkflow(true); }}>Lưu mới</button>
-            <button className="menu-action" title="Kiểm tra node trước khi chạy (Ctrl+E)" onClick={checkWorkflow}>Kiểm tra</button>
+            <button className="menu-action" title="Kiểm tra node trước khi chạy (Ctrl+E)" onClick={() => { void checkWorkflowWithRecursion(); }}>Kiểm tra</button>
             <button className="run-action" title={runState === "idle" ? "Chạy workflow (Ctrl+R)" : runState === "paused" ? "Tiếp tục workflow (Ctrl+R)" : "Tạm dừng workflow (Ctrl+R)"} onClick={toggleWorkflowRun}>
               <span>{runState === "running" ? "Ⅱ" : "▶"}</span>
               {runState === "idle" ? "Chạy" : runState === "paused" ? "Tiếp tục" : "Tạm dừng"}

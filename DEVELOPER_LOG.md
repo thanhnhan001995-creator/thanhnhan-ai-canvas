@@ -1727,6 +1727,15 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm test` — build thành công, **48/48** bài kiểm tra đạt; test SSR kiểm tra các điểm neo của thanh tab và đường đồng bộ workflow đang mở.
 
+## 2026-10-31 +07:00 — REC-05: Chặn đệ quy workflow
+
+- Khi bấm Kiểm tra hoặc Chạy, app duyệt đồ thị workflow đang mở và các file `.tess` được gọi để phát hiện cả vòng trực tiếp `A → A` lẫn vòng gián tiếp `A → B → C → A` trước khi thực thi.
+- Lỗi chỉ rõ đầy đủ chuỗi workflow tạo vòng và đánh dấu node `Gọi workflow` khởi đầu đường gọi đó; workflow không được chạy khi còn vòng hoặc không thể đọc đích được gọi.
+- Bổ sung chặn dự phòng ngay tại runtime theo call stack, nên một thay đổi file sau lúc kiểm tra hoặc một đường gọi không thể duyệt trước cũng bị dừng có thông báo thay vì chạy vô tận. Vẫn giữ giới hạn sâu 32 và tối đa 500 lượt gọi mỗi lượt chạy.
+- Tách bộ dò đồ thị dùng chung vào `shared/workflow-recursion.mjs`, có kiểm thử trực tiếp cho vòng `A → A`, `A → B → C → A`, và đồ thị hợp lệ không vòng.
+
+**Kiểm tra:** `npm test` — build thành công, **51/51** bài kiểm tra đạt.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 

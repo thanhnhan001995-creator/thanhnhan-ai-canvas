@@ -47,6 +47,9 @@ test("defines typed workflow nodes and local persistence", async () => {
   assert.match(page, /workflowNameFromPath\(file\.name\)/);
   assert.match(page, /executeWorkflowNode/);
   assert.match(page, /executeCalledWorkflow/);
+  assert.match(page, /findWorkflowReferenceCycles/);
+  assert.match(page, /Đệ quy vòng không an toàn/);
+  assert.match(page, /context\.stack\.indexOf\(loaded\.path\)/);
   assert.match(page, /Workflow đang mở/);
   assert.match(page, /syncCurrentWorkflowReference/);
   assert.match(page, /syncOpenWorkflowReference/);
