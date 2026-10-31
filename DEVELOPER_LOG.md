@@ -1709,6 +1709,15 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm test` — build thành công, **46/46** bài kiểm tra đạt.
 
+## 2026-10-31 +07:00 — REC-03: Node Gọi workflow
+
+- Thêm node Chi tiết `Gọi workflow` trong nhóm Điều khiển workflow. Node có thể chọn một file `.tess` hoặc dùng snapshot workflow hiện đang mở; sau khi chọn đích, toàn bộ cổng vào/cổng ra được tạo lại theo interface công bố bởi Cổng vào/Cổng ra.
+- Luồng chạy tuần tự được thực thi thật: dữ liệu từ node cha đi vào Cổng vào của workflow con theo ID cổng ổn định, dữ liệu tại Cổng ra quay lại output của node gọi. Workflow con có thể tiếp tục gọi workflow khác; tiến trình trả về Properties của node gọi.
+- Đọc file workflow qua IPC ở main process, kiểm tra file/interface đã đổi trước khi chạy, và báo rõ mục tiêu thiếu hoặc interface không còn khớp. Khi đổi đích, các dây cũ tại node gọi được tháo để tránh giữ kết nối sai hợp đồng.
+- Chế độ workflow đang mở dùng snapshot canvas hiện tại, do đó có thể tự gọi. Bộ chặn sâu tối đa 32 và tổng tối đa 500 lượt gọi đã có ở runtime; kiểm tra đồ thị vòng gọi đầy đủ sẽ hoàn tất ở REC-05.
+
+**Kiểm tra:** `npm test` — build thành công, **48/48** bài kiểm tra đạt; thêm kiểm thử truyền dữ liệu qua Cổng vào/Cổng ra và gọi workflow lồng qua resolver.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 

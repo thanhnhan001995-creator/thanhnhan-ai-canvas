@@ -32,6 +32,24 @@ type WorkflowNodeLike = {
   };
 };
 
+export type WorkflowEdgeLike = {
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+};
+
+export type WorkflowDocumentLike = {
+  workflowId?: string;
+  nodes: WorkflowNodeLike[];
+  edges: WorkflowEdgeLike[];
+};
+
+export type WorkflowCallRuntime = {
+  /** Cổng gọi lồng nhau do Desktop/UI giải quyết vì chỉ lớp đó được phép đọc .tess. */
+  callWorkflow?: (node: WorkflowNodeLike, inputs: Record<string, unknown>) => Promise<Record<string, unknown>>;
+};
+
 export type RuntimeFileStore = Map<string, File[]>;
 export type ExecutionProgress = {
   current?: number;
@@ -3188,6 +3206,73 @@ async function executeBasicWorkflowNode(
   // có thể render preview, thay vì coi đó là lỗi không có output.
   if (!node.data.outputs.length) return lastStepResult;
   if (!Object.keys(result).length) throw new Error(`Khối cơ bản “${node.data.label}” không tạo được đầu ra phù hợp`);
+  return result;
+}
+
+/**
+ * Chạy một workflow đã được gọi như một node. Runner không cập nhật React state;
+ * workflow cha chịu trách nhiệm hiển thị tiến trình/cảnh báo, còn runner giữ dữ
+ * liệu thuần để workflow con có thể được tái sử dụng ở nhiều canvas.
+ */
+export async function executeCalledWorkflow(
+  workflow: WorkflowDocumentLike,
+  callerInputs: Record<string, unknown>,
+  store: RuntimeFileStore,
+  runtime: WorkflowCallRuntime = {},
+  reportProgress?: ProgressReporter,
+): Promise<Record<string, unknown>> {
+  if (!Array.isArray(workflow.nodes) || !Array.isArray(workflow.edges)) throw new Error("Workflow cần gọi không có cấu trúc node/dây hợp lệ.");
+  const activeNodes = workflow.nodes;
+  const remaining = new Set(activeNodes.map((node) => node.id));
+  const completed = new Set<string>();
+  const outputsByNode = new Map<string, Record<string, unknown>>();
+  const inputsByNode = new Map<string, Record<string, unknown>>();
+  const familyOf = (node: WorkflowNodeLike) => node.data.family || node.data.label;
+
+  while (remaining.size) {
+    const ready = activeNodes.find((node) => remaining.has(node.id) && workflow.edges
+      .filter((edge) => edge.target === node.id)
+      .every((edge) => completed.has(edge.source)));
+    if (!ready) throw new Error("Workflow cần gọi có vòng lặp hoặc phụ thuộc dữ liệu không thể hoàn tất.");
+
+    const nodeInputs: Record<string, unknown> = {};
+    // Cổng vào không có dây vào trong workflow con: caller cấp thẳng dữ liệu
+    // bằng cùng ID cổng ổn định mà node Gọi workflow công bố.
+    if (familyOf(ready) === "Cổng vào") Object.assign(nodeInputs, callerInputs);
+    for (const edge of workflow.edges.filter((item) => item.target === ready.id)) {
+      if (!edge.targetHandle || !edge.sourceHandle) continue;
+      const sourceOutput = outputsByNode.get(edge.source);
+      if (sourceOutput && Object.prototype.hasOwnProperty.call(sourceOutput, edge.sourceHandle)) {
+        nodeInputs[edge.targetHandle] = sourceOutput[edge.sourceHandle];
+      }
+    }
+    const missing = ready.data.inputs.filter((port) => port.required && nodeInputs[port.id] === undefined);
+    if (missing.length) throw new Error(`Workflow cần gọi: node “${ready.data.label}” thiếu đầu vào bắt buộc: ${missing.map((port) => port.type).join(", ")}.`);
+
+    reportProgress?.({
+      current: completed.size + 1,
+      total: activeNodes.length,
+      message: `Đang chạy workflow con: ${ready.data.label}`,
+      detail: `Hoàn tất ${completed.size}/${activeNodes.length} node trong workflow được gọi.`,
+    });
+    const output = familyOf(ready) === "Gọi workflow"
+      ? runtime.callWorkflow
+        ? await runtime.callWorkflow(ready, nodeInputs)
+        : (() => { throw new Error("Workflow cần gọi lồng một workflow khác nhưng runner chưa có bộ phân giải workflow."); })()
+      : await executeWorkflowNode(ready, nodeInputs, store, reportProgress);
+    inputsByNode.set(ready.id, nodeInputs);
+    outputsByNode.set(ready.id, output);
+    completed.add(ready.id);
+    remaining.delete(ready.id);
+  }
+
+  const result: Record<string, unknown> = {};
+  for (const outputGateway of activeNodes.filter((node) => familyOf(node) === "Cổng ra")) {
+    const gatewayInputs = inputsByNode.get(outputGateway.id) ?? {};
+    for (const port of outputGateway.data.inputs) {
+      if (gatewayInputs[port.id] !== undefined) result[port.id] = gatewayInputs[port.id];
+    }
+  }
   return result;
 }
 

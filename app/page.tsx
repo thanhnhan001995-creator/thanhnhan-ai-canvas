@@ -30,11 +30,11 @@ import "@xyflow/react/dist/style.css";
 import { NODE_SPECS } from "./node-specs";
 import { BASIC_NODE_PRESETS } from "./basic-node-presets";
 import { getPortConnectSize, portContractLabel, portTypesCompatible, SELF_CONFIGURED_NODE_NAMES, type PortConnectSize } from "./node-contracts";
-import { beginLocalMediaWorkflowRun, controlLocalMediaWorkflow, endLocalMediaWorkflowRun, executeWorkflowNode, parseDurationInput, resetAiTokenUsage, type ExecutionProgress, type RuntimeFileStore } from "./research-client";
+import { beginLocalMediaWorkflowRun, controlLocalMediaWorkflow, endLocalMediaWorkflowRun, executeCalledWorkflow, executeWorkflowNode, parseDurationInput, resetAiTokenUsage, type ExecutionProgress, type RuntimeFileStore, type WorkflowDocumentLike } from "./research-client";
 import { hasNodeExecutor } from "./node-execution.ts";
 import { currentOpenAiModel, getAiModelCapabilities, replacementForRetiredOpenAiModel, type CapabilityState } from "./ai-model-capabilities";
 import { nextNodeName, nodeFamilyOf } from "./node-identity";
-import { createWorkflowId, parseWorkflowDocument, prepareWorkflowForSave, serializeTessWorkflow, workflowNameFromPath } from "../shared/tess-document.mjs";
+import { createWorkflowId, normalizeWorkflowInterface, parseWorkflowDocument, prepareWorkflowForSave, serializeTessWorkflow, workflowNameFromPath } from "../shared/tess-document.mjs";
 
 declare global {
   interface Window {
@@ -45,6 +45,7 @@ declare global {
       saveWorkflow: (request: { workflow: unknown; currentPath: string | null; defaultName: string; saveAs: boolean }) => Promise<{ canceled: boolean; path?: string; workflow?: unknown; error?: string }>;
       openWorkflow: () => Promise<{ canceled: boolean; path?: string; workflow?: unknown; error?: string }>;
       openRecentWorkflow: (filePath: string) => Promise<{ canceled: boolean; path?: string; workflow?: unknown; error?: string }>;
+      readWorkflowAtPath: (filePath: string) => Promise<{ path?: string; workflow?: unknown; error?: string }>;
       onCloseCanvas: (callback: () => void) => () => void;
     };
   }
@@ -185,6 +186,11 @@ function inspectWorkflow(nodes: ContentFlowNode[], edges: Edge[]): WorkflowInspe
     if (!nodeHasExecutor(node)) {
       issues.push({ nodeId: node.id, beacon: "error", message: `“${node.data.label}” chưa có bộ thực thi thật.` });
       beacons.set(node.id, "error");
+      continue;
+    }
+    if (family === "Gọi workflow" && !node.data.calledWorkflow) {
+      issues.push({ nodeId: node.id, beacon: "miss", message: `“${node.data.label}” chưa chọn workflow .tess cần gọi.` });
+      beacons.set(node.id, "miss");
       continue;
     }
     const hasConnectedInput = (port: Port) => edges.some((edge) => (
@@ -422,6 +428,8 @@ interface ContentNodeData extends Record<string, unknown> {
   basicSteps?: BasicStep[];
   /** Cổng do người dùng định nghĩa cho Cổng vào/Cổng ra workflow. */
   workflowPorts?: WorkflowGatewayPort[];
+  /** Workflow ngoài được node Gọi workflow tham chiếu cùng interface đã đọc. */
+  calledWorkflow?: CalledWorkflowReference;
   /** File đã được node Lưu file ghi thành công và có thể tái sử dụng. */
   storedFiles?: StoredFileReference[];
   validationError?: string;
@@ -454,6 +462,14 @@ type WorkflowInterfaceShape = {
   version: 1;
   inputs: WorkflowGatewayPort[];
   outputs: WorkflowGatewayPort[];
+};
+
+type CalledWorkflowReference = {
+  /** File .tess đã chọn hoặc workflow đang mở trong canvas hiện tại. */
+  source?: "file" | "current";
+  path: string;
+  workflowId: string;
+  workflowInterface: WorkflowInterfaceShape;
 };
 
 const WORKFLOW_INPUT_GATEWAY_FAMILY = "Cổng vào";
@@ -513,6 +529,24 @@ function workflowInterfaceFromNodes(nodes: ContentFlowNode[]): WorkflowInterface
     version: 1,
     inputs: normalizeWorkflowGatewayPorts(inputNode?.data.workflowPorts),
     outputs: normalizeWorkflowGatewayPorts(outputNode?.data.workflowPorts),
+  };
+}
+
+function normalizeWorkflowInterfaceShape(value: unknown): WorkflowInterfaceShape {
+  return normalizeWorkflowInterface(value) as WorkflowInterfaceShape;
+}
+
+function portsForCalledWorkflow(workflowInterface: WorkflowInterfaceShape): Pick<NodeDefinition, "inputs" | "outputs"> {
+  const toPorts = (ports: WorkflowGatewayPort[], required: boolean) => ports.map((port) => ({
+    id: `workflow-port-${port.id}`,
+    label: port.name,
+    type: port.type,
+    connectSize: getPortConnectSize(port.type),
+    required: required && port.required,
+  }));
+  return {
+    inputs: toPorts(workflowInterface.inputs, true),
+    outputs: toPorts(workflowInterface.outputs, false),
   };
 }
 
@@ -1600,6 +1634,32 @@ const WORKFLOW_INTERFACE_NODE_DEFINITIONS: NodeDefinition[] = [
   },
 ];
 
+const WORKFLOW_CALL_NODE_DEFINITION: NodeDefinition = {
+  kind: "workflow-call",
+  label: "Gọi workflow",
+  family: "Gọi workflow",
+  icon: "▧",
+  category: "Điều khiển workflow",
+  description: "Chọn workflow .tess để gọi như một node. Cổng tự đồng bộ theo Cổng vào/Cổng ra của workflow được chọn.",
+  inputs: [],
+  outputs: [],
+  configFields: [
+    { key: "workflowTargetMode", label: "Nguồn workflow", type: "select", options: ["Chọn file .tess", "Workflow đang mở (đã lưu)"], defaultValue: "Chọn file .tess" },
+    {
+      key: "workflowPath",
+      label: "Workflow cần gọi",
+      type: "file",
+      accept: ".tess,.json",
+      multiple: false,
+      persistPaths: true,
+      required: true,
+      showWhen: { key: "workflowTargetMode", value: "Chọn file .tess" },
+      help: "Chọn file .tess. App đọc interface và tạo các cổng tương ứng; file JSON cũ vẫn chỉ đọc để chuyển đổi an toàn.",
+    },
+  ],
+  defaults: { workflowTargetMode: "Chọn file .tess" },
+};
+
 const primitiveDefinitionByLabel = new Map(NODE_SPECS.map((spec, index) => [spec.name, NODE_DEFINITIONS[index]]));
 
 function uniquePorts(ports: Port[], prefix: "input" | "output"): Port[] {
@@ -1800,9 +1860,9 @@ const BASIC_NODE_DEFINITIONS: NodeDefinition[] = ensureUniqueIconsByCategory(BAS
 const HIDDEN_LEGACY_ADVANCED_FAMILIES = new Set(["Trích xuất transcript video"]);
 const NODE_LIBRARY: Record<LibraryMode, readonly NodeDefinition[]> = {
   basic: BASIC_NODE_DEFINITIONS,
-  advanced: [...WORKFLOW_INTERFACE_NODE_DEFINITIONS, ...NODE_DEFINITIONS.filter((definition) => !HIDDEN_LEGACY_ADVANCED_FAMILIES.has(definition.family))],
+  advanced: [...WORKFLOW_INTERFACE_NODE_DEFINITIONS, WORKFLOW_CALL_NODE_DEFINITION, ...NODE_DEFINITIONS.filter((definition) => !HIDDEN_LEGACY_ADVANCED_FAMILIES.has(definition.family))],
 };
-const ALL_NODE_DEFINITIONS = [...BASIC_NODE_DEFINITIONS, ...WORKFLOW_INTERFACE_NODE_DEFINITIONS, ...NODE_DEFINITIONS];
+const ALL_NODE_DEFINITIONS = [...BASIC_NODE_DEFINITIONS, ...WORKFLOW_INTERFACE_NODE_DEFINITIONS, WORKFLOW_CALL_NODE_DEFINITION, ...NODE_DEFINITIONS];
 const definitionMap = new Map(ALL_NODE_DEFINITIONS.map((definition) => [definition.kind, definition]));
 const LEGACY_ADVANCED_KIND_MAP: Record<string, string> = (() => {
   const legacy = NODE_DEFINITIONS.find((definition) => definition.family === "Trích xuất transcript video");
@@ -1914,6 +1974,13 @@ function refreshNodeAppearance(node: ContentFlowNode): ContentFlowNode {
   const gatewayDirection = workflowGatewayDirection(normalizedNode);
   const workflowPorts = gatewayDirection ? normalizeWorkflowGatewayPorts(normalizedNode.data.workflowPorts) : undefined;
   const gatewayActivePorts = gatewayDirection && workflowPorts ? portsForWorkflowGateway(gatewayDirection, workflowPorts) : undefined;
+  const savedCalledWorkflow = nodeFamilyOf(normalizedNode) === "Gọi workflow" && normalizedNode.data.calledWorkflow
+    ? normalizedNode.data.calledWorkflow
+    : undefined;
+  const calledWorkflow = savedCalledWorkflow && typeof savedCalledWorkflow.path === "string" && typeof savedCalledWorkflow.workflowId === "string"
+    ? { ...savedCalledWorkflow, workflowInterface: normalizeWorkflowInterfaceShape(savedCalledWorkflow.workflowInterface) }
+    : undefined;
+  const calledWorkflowPorts = calledWorkflow ? portsForCalledWorkflow(calledWorkflow.workflowInterface) : undefined;
   const activePorts = portsForBasicConfiguration(definition, migratedConfig, selectedOperation);
   const migratedLegacyTranscript = Boolean(LEGACY_ADVANCED_KIND_MAP[normalizedNode.data.kind]);
   const migratedLabel = /^Trích xuất transcript video(?:\s+\d+)?$/.test(normalizedNode.data.label)
@@ -1931,7 +1998,7 @@ function refreshNodeAppearance(node: ContentFlowNode): ContentFlowNode {
        label: migratedLegacyTranscript ? migratedLabel : NODE_NAME_OVERRIDES[normalizedNode.data.label] ? definition.label : normalizedNode.data.label,
       icon: definition.icon,
       category: definition.category,
-       inputs: gatewayActivePorts?.inputs ?? activePorts.inputs,
+       inputs: gatewayActivePorts?.inputs ?? calledWorkflowPorts?.inputs ?? activePorts.inputs,
        outputs: isFileStorageNode(normalizedNode)
          ? storageOutputsForType(
            activePorts.outputs,
@@ -1939,7 +2006,7 @@ function refreshNodeAppearance(node: ContentFlowNode): ContentFlowNode {
              ? "Dữ liệu"
              : String(migratedConfig.storedDataType ?? "StoredFile"),
          )
-          : gatewayActivePorts?.outputs ?? activePorts.outputs,
+           : gatewayActivePorts?.outputs ?? calledWorkflowPorts?.outputs ?? activePorts.outputs,
       configFields: definition.basicMode === "choice"
         ? choiceFields(definition, selectedOperation)
         : definition.configFields,
@@ -1949,6 +2016,7 @@ function refreshNodeAppearance(node: ContentFlowNode): ContentFlowNode {
       basicNodeLabels: definition.basicNodeLabels,
       basicSteps: definition.basicSteps,
        ...(workflowPorts ? { workflowPorts } : {}),
+       ...(calledWorkflow ? { calledWorkflow } : {}),
       paused: normalizedNode.data.paused ?? false,
       beacon: normalizedNode.data.beacon ?? "uncheck",
     },
@@ -4087,6 +4155,127 @@ function WorkflowApp() {
     runtimeFilesRef.current.set(runtimeKey, result.files.map(desktopRuntimeFile));
   }, []);
 
+  const syncCalledWorkflowReference = useCallback(async (nodeId: string, filePath: string) => {
+    if (!window.contentFlowDesktop?.readWorkflowAtPath) {
+      setNotice("Chọn workflow cần gọi chỉ dùng được trong ứng dụng Tesseract Desktop.");
+      return false;
+    }
+    const result = await window.contentFlowDesktop.readWorkflowAtPath(filePath);
+    if (result.error || !result.workflow || !result.path) {
+      setNotice(result.error || "Không thể đọc workflow cần gọi.");
+      return false;
+    }
+    try {
+      const workflow = result.workflow as { workflowId?: unknown; workflowInterface?: unknown };
+      if (typeof workflow.workflowId !== "string" || !workflow.workflowId.trim()) throw new Error("Workflow cần gọi chưa có ID ổn định. Hãy mở và lưu lại workflow đó bằng Tesseract.");
+      const workflowInterface = normalizeWorkflowInterfaceShape(workflow.workflowInterface);
+      const reference: CalledWorkflowReference = { source: "file", path: result.path, workflowId: workflow.workflowId, workflowInterface };
+      const callPorts = portsForCalledWorkflow(workflowInterface);
+      rememberCanvasChange();
+      setEdges((current) => current.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+      setNodes((current) => current.map((node) => node.id === nodeId ? {
+        ...node,
+        data: {
+          ...node.data,
+          calledWorkflow: reference,
+          inputs: callPorts.inputs,
+          outputs: callPorts.outputs,
+          config: {
+            ...node.data.config,
+            workflowPath: workflowNameFromPath(result.path),
+            workflowPathPaths: JSON.stringify([result.path]),
+          },
+          validationError: undefined,
+          status: "idle",
+          beacon: "uncheck",
+          output: undefined,
+        },
+      } : node));
+      setNotice(`Đã đồng bộ ${workflowInterface.inputs.length} cổng vào và ${workflowInterface.outputs.length} cổng ra từ “${workflowNameFromPath(result.path)}”.`);
+      return true;
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Interface workflow cần gọi không hợp lệ.");
+      return false;
+    }
+  }, [rememberCanvasChange, setEdges, setNodes]);
+
+  const syncCurrentWorkflowReference = useCallback((nodeId: string) => {
+    const workflowInterface = workflowInterfaceFromNodes(nodes);
+    const reference: CalledWorkflowReference = {
+      source: "current",
+      // Đây là định danh lưu được vào .tess, không phải đường dẫn thật. Khi
+      // chạy, runner sẽ lấy snapshot canvas đang mở có cùng workflowId.
+      path: `current://${workflowId}`,
+      workflowId,
+      workflowInterface,
+    };
+    const callPorts = portsForCalledWorkflow(workflowInterface);
+    rememberCanvasChange();
+    setEdges((current) => current.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+    setNodes((current) => current.map((node) => node.id === nodeId ? {
+      ...node,
+      data: {
+        ...node.data,
+        calledWorkflow: reference,
+        inputs: callPorts.inputs,
+        outputs: callPorts.outputs,
+        config: {
+          ...node.data.config,
+          workflowPath: `${workflowName.trim() || "Workflow hiện tại"} (đang mở)`,
+          workflowPathPaths: "",
+        },
+        validationError: undefined,
+        status: "idle",
+        beacon: "uncheck",
+        output: undefined,
+      },
+    } : node));
+    setNotice(`Đã đồng bộ ${workflowInterface.inputs.length} cổng vào và ${workflowInterface.outputs.length} cổng ra từ workflow đang mở “${workflowName.trim() || "Workflow hiện tại"}”.`);
+  }, [nodes, rememberCanvasChange, workflowId, workflowName]);
+
+  const executeWorkflowCallNode = useCallback(async (
+    initialNode: ContentFlowNode,
+    initialInputs: Record<string, unknown>,
+    reportProgress?: (progress: ExecutionProgress) => void,
+  ): Promise<Record<string, unknown>> => {
+    const context = { stack: [] as string[], calls: 0 };
+    const currentDocument: WorkflowDocumentLike & { workflowId: string; workflowInterface: WorkflowInterfaceShape } = {
+      workflowId,
+      workflowInterface: workflowInterfaceFromNodes(nodes),
+      nodes,
+      edges,
+    };
+    const visit = async (node: ContentFlowNode | WorkflowDocumentLike["nodes"][number], inputs: Record<string, unknown>): Promise<Record<string, unknown>> => {
+      const extended = node as typeof node & { data: { calledWorkflow?: CalledWorkflowReference; config: Record<string, FieldValue> } };
+      const reference = extended.data.calledWorkflow;
+      const configuredPath = reference?.path ?? filePathsFromConfig(extended.data.config.workflowPathPaths)[0];
+      if (!configuredPath) throw new Error(`Node “${extended.data.label}” chưa chọn workflow .tess cần gọi.`);
+      if (context.stack.length >= 32) throw new Error(`Workflow gọi lồng vượt độ sâu an toàn 32: ${[...context.stack, configuredPath].join(" → ")}`);
+      if (context.calls >= 500) throw new Error(`Workflow gọi lồng vượt giới hạn an toàn 500 lần trong một lượt chạy.`);
+      const loaded: { path?: string; workflow?: unknown; error?: string } = reference?.source === "current" || configuredPath === `current://${workflowId}`
+        ? { path: configuredPath, workflow: currentDocument }
+        : await window.contentFlowDesktop?.readWorkflowAtPath(configuredPath);
+      if (!loaded?.workflow || !loaded.path || loaded.error) throw new Error(loaded?.error || `Không thể đọc workflow cần gọi: ${configuredPath}`);
+      const document = loaded.workflow as WorkflowDocumentLike & { workflowId?: unknown; workflowInterface?: unknown };
+      if (!Array.isArray(document.nodes) || !Array.isArray(document.edges) || typeof document.workflowId !== "string") throw new Error(`Workflow cần gọi “${workflowNameFromPath(configuredPath)}” không hợp lệ hoặc chưa được lưu bằng Tesseract.`);
+      const expectedInterface = extended.data.calledWorkflow?.workflowInterface;
+      const actualInterface = normalizeWorkflowInterfaceShape(document.workflowInterface);
+      if (expectedInterface && JSON.stringify(expectedInterface) !== JSON.stringify(actualInterface)) {
+        throw new Error(`Workflow “${workflowNameFromPath(configuredPath)}” đã đổi interface. Hãy chọn lại file tại node Gọi workflow để đồng bộ cổng.`);
+      }
+      context.calls += 1;
+      context.stack.push(loaded.path);
+      try {
+        return await executeCalledWorkflow(document, inputs, runtimeFilesRef.current, {
+          callWorkflow: (nestedNode, nestedInputs) => visit(nestedNode, nestedInputs),
+        }, reportProgress);
+      } finally {
+        context.stack.pop();
+      }
+    };
+    return visit(initialNode, initialInputs);
+  }, [edges, nodes, workflowId]);
+
   const updatePersistedFiles = useCallback(async (field: ConfigField) => {
     if (!selectedNode || !selectedId) return;
     if (!window.contentFlowDesktop?.pickFiles) {
@@ -4100,6 +4289,10 @@ function WorkflowApp() {
       return;
     }
     const paths = result.paths;
+    if (nodeFamilyOf(selectedNode) === "Gọi workflow" && field.key === "workflowPath") {
+      await syncCalledWorkflowReference(selectedNode.id, paths[0]);
+      return;
+    }
     const validationError = validateSelectedPaths(paths, field.fileValidation);
     setNodes((current) => current.map((node) => node.id === selectedId ? {
       ...node,
@@ -4127,7 +4320,7 @@ function WorkflowApp() {
       const message = error instanceof Error ? error.message : "Không thể nạp tệp đã chọn.";
       setNotice(message);
     }
-  }, [hydratePersistedFiles, selectedId, selectedNode]);
+  }, [hydratePersistedFiles, selectedId, selectedNode, syncCalledWorkflowReference]);
 
   const openAttentionEditor = useCallback(async () => {
     if (!selectedNode || !["Lấy vùng chú ý", "Thiết lập vùng chú ý video", "Tìm ảnh tương đồng"].includes(nodeFamilyOf(selectedNode)) && selectedNode.data.basicPresetId !== "image-input-optimize") return;
@@ -4412,10 +4605,18 @@ function WorkflowApp() {
 
         try {
           if (hasReusableStoredFiles(node)) await hydrateStoredFiles(node);
-          for (const field of node.data.configFields.filter((field) => field.persistPaths)) {
-            await hydratePersistedFiles(node, field);
+          if (nodeFamilyOf(node) !== "Gọi workflow") {
+            for (const field of node.data.configFields.filter((field) => field.persistPaths)) {
+              await hydratePersistedFiles(node, field);
+            }
           }
-          const output = await executeWorkflowNode(node, nodeInputs, runtimeFilesRef.current, (progress) => {
+          const output = nodeFamilyOf(node) === "Gọi workflow"
+            ? await executeWorkflowCallNode(node, nodeInputs, (progress) => {
+              setNodes((current) => current.map((item) => item.id === node.id && item.data.status === "running"
+                ? { ...item, data: { ...item.data, progress } }
+                : item));
+            })
+            : await executeWorkflowNode(node, nodeInputs, runtimeFilesRef.current, (progress) => {
             setNodes((current) => current.map((item) => item.id === node.id && item.data.status === "running"
               ? { ...item, data: { ...item.data, progress } }
               : item));
@@ -5135,6 +5336,15 @@ function WorkflowApp() {
                     onChange={(event) => updateNodeIdentity("label", event.target.value)}
                   />
                 </label>
+                {nodeFamilyOf(selectedNode) === "Gọi workflow" && selectedNode.data.config.workflowTargetMode === "Workflow đang mở (đã lưu)" && (
+                  <section className="workflow-current-reference" aria-label="Workflow đang mở">
+                    <div>
+                      <strong>Workflow đang mở</strong>
+                      <small>Dùng snapshot canvas hiện tại. Có thể gọi lại chính workflow này; dây tại node gọi sẽ được đồng bộ lại theo Cổng vào/Cổng ra.</small>
+                    </div>
+                    <button type="button" onClick={() => syncCurrentWorkflowReference(selectedNode.id)}>Dùng workflow đang mở</button>
+                  </section>
+                )}
                 {isWorkflowGatewayNode(selectedNode) && (() => {
                   const direction = workflowGatewayDirection(selectedNode)!;
                   const ports = normalizeWorkflowGatewayPorts(selectedNode.data.workflowPorts);

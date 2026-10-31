@@ -227,6 +227,20 @@ ipcMain.handle("content-flow:open-recent-workflow", async (_event, requestedPath
   }
 });
 
+// Đọc workflow cho node Gọi workflow mà không thay canvas hiện tại. Main process
+// giữ quyền đọc filesystem; renderer chỉ nhận dữ liệu workflow đã được kiểm tra.
+ipcMain.handle("content-flow:read-workflow-at-path", async (_event, requestedPath) => {
+  if (typeof requestedPath !== "string" || !isWorkflowDocumentPath(requestedPath)) {
+    return { error: "Đường dẫn workflow cần gọi không hợp lệ." };
+  }
+  const filePath = path.resolve(requestedPath);
+  try {
+    return { path: filePath, workflow: parseWorkflowDocument(await readFile(filePath, "utf8")) };
+  } catch (error) {
+    return { error: error instanceof Error ? `Không thể đọc workflow cần gọi: ${error.message}` : "Không thể đọc workflow cần gọi." };
+  }
+});
+
 ipcMain.handle("content-flow:save-workflow", async (_event, request = {}) => {
   const workflow = request.workflow;
   const defaultName = safeWorkflowName(request.defaultName);

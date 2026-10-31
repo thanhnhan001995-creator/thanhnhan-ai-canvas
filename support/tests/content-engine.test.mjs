@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const { executeWorkflowNode, frameImageAssets, parseDurationInput } = await import("../../app/research-client.ts");
+const { executeCalledWorkflow, executeWorkflowNode, frameImageAssets, parseDurationInput } = await import("../../app/research-client.ts");
 const { NODE_SPECS } = await import("../../app/node-specs.ts");
 const { BASIC_NODE_PRESETS } = await import("../../app/basic-node-presets.ts");
 const { SELF_CONFIGURED_NODE_NAMES, getPortContract, portTypesCompatible } = await import("../../app/node-contracts.ts");
@@ -341,6 +341,7 @@ test("execution capability is explicit for both supported and blocked node catal
   assert.equal(hasNodeExecutor("Duyệt đầu ra AI", "AI & mô hình"), true);
   assert.equal(hasNodeExecutor("Cổng vào", "Điều khiển workflow"), true);
   assert.equal(hasNodeExecutor("Cổng ra", "Điều khiển workflow"), true);
+  assert.equal(hasNodeExecutor("Gọi workflow", "Điều khiển workflow"), true);
   assert.equal(hasNodeExecutor("Tạo transcript video theo thời gian", "Nghiên cứu"), true);
   assert.equal(hasNodeExecutor("Trích xuất transcript video", "Nghiên cứu"), false);
   assert.equal(hasNodeExecutor("Tạo ảnh bằng AI", "Hình ảnh"), false);
@@ -351,6 +352,58 @@ test("workflow input gateway replays caller values by stable port ID", async () 
   const node = workflowNode("Cổng vào", [], ["Text"]);
   const result = await executeWorkflowNode(node, { "output-1": "Dữ liệu từ workflow cha" }, new Map());
   assert.deepEqual(result, { "output-1": "Dữ liệu từ workflow cha" });
+});
+
+test("called workflow passes values from its input gateway to output gateway", async () => {
+  const workflow = {
+    workflowId: "workflow-child",
+    nodes: [
+      {
+        id: "gateway-in",
+        data: { label: "Cổng vào", family: "Cổng vào", category: "Điều khiển workflow", kind: "workflow-input-gateway", inputs: [], outputs: [{ id: "workflow-port-title", type: "Text" }], config: {} },
+      },
+      {
+        id: "gateway-out",
+        data: { label: "Cổng ra", family: "Cổng ra", category: "Điều khiển workflow", kind: "workflow-output-gateway", inputs: [{ id: "workflow-port-title", type: "Text", required: true }], outputs: [], config: {} },
+      },
+    ],
+    edges: [{ source: "gateway-in", sourceHandle: "workflow-port-title", target: "gateway-out", targetHandle: "workflow-port-title" }],
+  };
+  const result = await executeCalledWorkflow(workflow, { "workflow-port-title": "Xin chào từ workflow cha" }, new Map());
+  assert.deepEqual(result, { "workflow-port-title": "Xin chào từ workflow cha" });
+});
+
+test("called workflow can invoke a nested workflow through the supplied resolver", async () => {
+  const workflow = {
+    workflowId: "workflow-parent",
+    nodes: [
+      {
+        id: "gateway-in",
+        data: { label: "Cổng vào", family: "Cổng vào", category: "Điều khiển workflow", kind: "workflow-input-gateway", inputs: [], outputs: [{ id: "workflow-port-source", type: "Text" }], config: {} },
+      },
+      {
+        id: "call-child",
+        data: { label: "Gọi workflow", family: "Gọi workflow", category: "Điều khiển workflow", kind: "workflow-call", inputs: [{ id: "workflow-port-source", type: "Text", required: true }], outputs: [{ id: "workflow-port-result", type: "Text" }], config: {} },
+      },
+      {
+        id: "gateway-out",
+        data: { label: "Cổng ra", family: "Cổng ra", category: "Điều khiển workflow", kind: "workflow-output-gateway", inputs: [{ id: "workflow-port-result", type: "Text", required: true }], outputs: [], config: {} },
+      },
+    ],
+    edges: [
+      { source: "gateway-in", sourceHandle: "workflow-port-source", target: "call-child", targetHandle: "workflow-port-source" },
+      { source: "call-child", sourceHandle: "workflow-port-result", target: "gateway-out", targetHandle: "workflow-port-result" },
+    ],
+  };
+  const result = await executeCalledWorkflow(
+    workflow,
+    { "workflow-port-source": "Dữ liệu từ workflow cha" },
+    new Map(),
+    {
+      callWorkflow: async (_node, inputs) => ({ "workflow-port-result": `${inputs["workflow-port-source"]} / workflow con` }),
+    },
+  );
+  assert.deepEqual(result, { "workflow-port-result": "Dữ liệu từ workflow cha / workflow con" });
 });
 
 test("model capabilities identify image support and only send reasoning to compatible OpenAI models", () => {

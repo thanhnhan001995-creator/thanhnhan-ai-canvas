@@ -12,7 +12,7 @@ const EXECUTABLE_LABELS = new Set([
   "Lập chỉ mục video theo thời gian", "Chuẩn hóa video nguồn", "Trích frame từ video", "Tách âm thanh từ video", "Thiết lập vùng chú ý video", "Làm rõ highlight lặp", "Tạo transcript video theo thời gian", "Tạo storyboard từ video", "Phân tích video theo từng đoạn", "Rà soát đoạn video chưa chắc chắn", "Tổng hợp nội dung video", "Chọn highlight bằng AI", "Dựng video highlight",
   "Giảm độ phân giải ảnh", "Lấy vùng chú ý", "Tìm ảnh tương đồng",
   "If/Else", "Switch",
-  "Cổng vào", "Cổng ra",
+  "Cổng vào", "Cổng ra", "Gọi workflow",
   "Xem dữ liệu trên canvas",
   "Cắt video", "Nối video", "Ghép các cảnh", "Thêm nhạc nền", "Đặt tên", "Lưu file", "Tạo subtitle", "Chèn subtitle", "Kiểm tra kỹ thuật",
   "Kiểm tra yêu cầu và cấu trúc", "Chuẩn bị kiểm tra AI", "Đọc kết quả AI kiểm tra", "Tổng hợp báo cáo kiểm tra", "Chấm điểm thành phẩm", "Duyệt xuất bản",
