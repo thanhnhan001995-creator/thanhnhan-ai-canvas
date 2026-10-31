@@ -2929,6 +2929,9 @@ function WorkflowApp() {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const runtimeFilesRef = useRef<RuntimeFileStore>(new Map());
+  // Bản lưu cục bộ chỉ được phục hồi một lần khi khởi động app. Nếu phụ thuộc
+  // tab đang hoạt động, mỗi tab mới sẽ bị bản workflow cũ ghi đè.
+  const workspaceRestoredRef = useRef(false);
   const initialWorkflowTabId = useRef(createWorkflowTabId()).current;
   const initialWorkflowId = useRef(createWorkflowId()).current;
   const [workflowName, setWorkflowName] = useState("New workflow");
@@ -3559,6 +3562,8 @@ function WorkflowApp() {
   }, [nodes, setNodes]);
 
   useEffect(() => {
+    if (workspaceRestoredRef.current) return;
+    workspaceRestoredRef.current = true;
     const saved = localStorage.getItem("content-flow-workspace-v5");
     if (!saved) return;
     try {
@@ -3603,7 +3608,7 @@ function WorkflowApp() {
     } catch {
       setNotice("Không thể đọc bản lưu cũ; canvas đang để trống.");
     }
-  }, [activeWorkflowTabId, resetCanvasHistory, setEdges, setNodes]);
+  }, [resetCanvasHistory, setEdges, setNodes]);
 
   useEffect(() => {
     setRecentWorkflows(readRecentWorkflows());

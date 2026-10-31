@@ -56,6 +56,8 @@ test("defines typed workflow nodes and local persistence", async () => {
   assert.match(page, /syncCurrentWorkflowReference/);
   assert.match(page, /syncOpenWorkflowReference/);
   assert.match(page, /workflow-tabs/);
+  assert.match(page, /const workspaceRestoredRef = useRef\(false\)/);
+  assert.match(page, /if \(workspaceRestoredRef\.current\) return;[\s\S]*?workspaceRestoredRef\.current = true/);
   assert.match(page, /Sao chép output/);
   assert.match(page, /className="brand-mark" src="\/tesseract-icon\.svg"/);
   assert.match(page, /navigator\.clipboard\?\.writeText/);

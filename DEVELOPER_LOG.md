@@ -1744,6 +1744,13 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm test` — build thành công, **54/54** bài kiểm tra đạt.
 
+## 2026-10-31 +07:00 — Sửa tab workflow mới bị ghi đè
+
+- Sửa cơ chế khôi phục workflow cục bộ: chỉ nạp workflow gần nhất đúng một lần khi app khởi động.
+- Tạo tab bằng `+`, `Mới` hoặc `Ctrl+N` nay giữ workflow trống với `workflowId` riêng; mở một file khác giữ dữ liệu của file đó ở tab mới, không bị file/tab trước ghi đè.
+
+**Kiểm tra:** `npm test` — build thành công, **54/54** bài kiểm tra đạt.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 
