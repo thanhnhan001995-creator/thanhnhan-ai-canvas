@@ -67,6 +67,17 @@ button { color: inherit; }
 .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(53, 212, 154, .1); }
 .top-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 
+.workflow-tabs { min-height: 34px; display: flex; align-items: stretch; gap: 2px; overflow-x: auto; padding: 4px 10px 0; border-bottom: 1px solid #252f3d; background: #0a101a; }
+.workflow-tab { display: flex; min-width: 0; max-width: 230px; border: 1px solid #293747; border-bottom: 0; border-radius: 7px 7px 0 0; background: #101a28; }
+.workflow-tab.active { border-color: #6c5ce7; background: #1a2031; box-shadow: inset 0 2px 0 #8977ff; }
+.workflow-tab-select { min-width: 0; border: 0; padding: 0 8px; background: transparent; color: #aeb9c8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; font-size: 10px; font-weight: 700; }
+.workflow-tab.active .workflow-tab-select { color: #f0edff; }
+.workflow-tab-select span { display: inline-block; width: 8px; color: #f6bd3c; font-size: 7px; vertical-align: 1px; }
+.workflow-tab-close, .workflow-tab-new { width: 26px; border: 0; background: transparent; color: #8090a3; cursor: pointer; font-size: 15px; line-height: 1; }
+.workflow-tab-close:hover { color: #fff; background: #633344; }
+.workflow-tab-new { flex: 0 0 28px; margin: 1px 0 4px; border: 1px solid #35465c; border-radius: 5px; background: #142033; color: #d1e4ff; }
+.workflow-tab-new:hover { border-color: #6b8fbb; background: #203754; }
+
 .button {
   border: 1px solid var(--border); border-radius: 9px; height: 36px; padding: 0 14px;
   background: #121b29; cursor: pointer; font-size: 12px; font-weight: 650;

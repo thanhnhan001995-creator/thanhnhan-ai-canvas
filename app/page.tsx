@@ -466,10 +466,11 @@ type WorkflowInterfaceShape = {
 
 type CalledWorkflowReference = {
   /** File .tess đã chọn hoặc workflow đang mở trong canvas hiện tại. */
-  source?: "file" | "current";
+  source?: "file" | "current" | "open-tab";
   path: string;
   workflowId: string;
   workflowInterface: WorkflowInterfaceShape;
+  tabId?: string;
 };
 
 const WORKFLOW_INPUT_GATEWAY_FAMILY = "Cổng vào";
@@ -561,6 +562,21 @@ type CanvasHistorySnapshot = {
   groups: WorkflowGroup[];
 };
 
+type WorkflowTab = {
+  id: string;
+  name: string;
+  filePath: string | null;
+  workflowId: string;
+  workflowInterface: unknown;
+  nodes: ContentFlowNode[];
+  edges: Edge[];
+  groups: WorkflowGroup[];
+  selectedId: string | null;
+  history: { past: CanvasHistorySnapshot[]; future: CanvasHistorySnapshot[] };
+  /** Nội dung tại lần lưu gần nhất; dùng để hiển thị dấu chưa lưu riêng từng tab. */
+  savedContentKey: string;
+};
+
 const CANVAS_HISTORY_LIMIT = 100;
 
 function canvasHistorySnapshot(nodes: ContentFlowNode[], edges: Edge[], selectedId: string | null, groups: WorkflowGroup[] = []): CanvasHistorySnapshot {
@@ -583,6 +599,21 @@ function canvasHistorySnapshot(nodes: ContentFlowNode[], edges: Edge[], selected
 
 function canvasHistoryKey(snapshot: CanvasHistorySnapshot): string {
   return JSON.stringify(snapshot);
+}
+
+function workflowTabContentKey(value: Pick<WorkflowTab, "name" | "workflowId" | "workflowInterface" | "nodes" | "edges" | "groups">): string {
+  return JSON.stringify({
+    name: value.name,
+    workflowId: value.workflowId,
+    workflowInterface: value.workflowInterface,
+    nodes: value.nodes,
+    edges: value.edges,
+    groups: value.groups,
+  });
+}
+
+function createWorkflowTabId(): string {
+  return `workflow-tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function normalizeWorkflowGroups(value: unknown, nodes: ContentFlowNode[]): WorkflowGroup[] {
@@ -1644,7 +1675,7 @@ const WORKFLOW_CALL_NODE_DEFINITION: NodeDefinition = {
   inputs: [],
   outputs: [],
   configFields: [
-    { key: "workflowTargetMode", label: "Nguồn workflow", type: "select", options: ["Chọn file .tess", "Workflow đang mở (đã lưu)"], defaultValue: "Chọn file .tess" },
+    { key: "workflowTargetMode", label: "Nguồn workflow", type: "select", options: ["Chọn file .tess", "Workflow đang mở"], defaultValue: "Chọn file .tess" },
     {
       key: "workflowPath",
       label: "Workflow cần gọi",
@@ -2897,14 +2928,32 @@ function WorkflowApp() {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const runtimeFilesRef = useRef<RuntimeFileStore>(new Map());
+  const initialWorkflowTabId = useRef(createWorkflowTabId()).current;
+  const initialWorkflowId = useRef(createWorkflowId()).current;
   const [workflowName, setWorkflowName] = useState("New workflow");
   const [workflowPath, setWorkflowPath] = useState<string | null>(null);
-  const [workflowId, setWorkflowId] = useState(() => createWorkflowId());
+  const [workflowId, setWorkflowId] = useState(initialWorkflowId);
   const [workflowInterface, setWorkflowInterface] = useState<unknown>(undefined);
   const [nodes, setNodes, onNodesChange] = useNodesState<ContentFlowNode>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [workflowGroups, setWorkflowGroups] = useState<WorkflowGroup[]>([]);
+  const [workflowTabs, setWorkflowTabs] = useState<WorkflowTab[]>(() => {
+    const initial: Omit<WorkflowTab, "savedContentKey"> = {
+      id: initialWorkflowTabId,
+      name: "New workflow",
+      filePath: null,
+      workflowId: initialWorkflowId,
+      workflowInterface: undefined,
+      nodes: initialNodes,
+      edges: initialEdges,
+      groups: [],
+      selectedId: null,
+      history: { past: [], future: [] },
+    };
+    return [{ ...initial, savedContentKey: workflowTabContentKey(initial) }];
+  });
+  const [activeWorkflowTabId, setActiveWorkflowTabId] = useState(initialWorkflowTabId);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingGroupName, setEditingGroupName] = useState("");
   const [outlinerHeight, setOutlinerHeight] = useState(230);
@@ -3036,6 +3085,129 @@ function WorkflowApp() {
     restoreCanvasSnapshot(next, "Đã phục hồi thao tác canvas.");
   }, [restoreCanvasSnapshot, runState]);
 
+  const activeWorkflowTab = useMemo(
+    () => workflowTabs.find((tab) => tab.id === activeWorkflowTabId) ?? null,
+    [activeWorkflowTabId, workflowTabs],
+  );
+  const activeWorkflowDirty = useMemo(() => {
+    if (!activeWorkflowTab) return false;
+    return workflowTabContentKey({ name: workflowName, workflowId, workflowInterface, nodes, edges, groups: workflowGroups }) !== activeWorkflowTab.savedContentKey;
+  }, [activeWorkflowTab, edges, nodes, workflowGroups, workflowId, workflowInterface, workflowName]);
+
+  const switchWorkflowTab = useCallback((targetTabId: string) => {
+    if (targetTabId === activeWorkflowTabId) return;
+    if (runState !== "idle") {
+      setNotice("Không thể chuyển workflow khi đang chạy. Hãy tạm dừng hoặc dừng workflow trước.");
+      return;
+    }
+    const target = workflowTabs.find((tab) => tab.id === targetTabId);
+    if (!target) return;
+    const activeTab = workflowTabs.find((tab) => tab.id === activeWorkflowTabId);
+    setWorkflowTabs((tabs) => tabs.map((tab) => tab.id !== activeWorkflowTabId ? tab : {
+      ...tab,
+      name: workflowName,
+      filePath: workflowPath,
+      workflowId,
+      workflowInterface,
+      nodes,
+      edges,
+      groups: workflowGroups,
+      selectedId,
+      history: { past: [...canvasHistoryRef.current.past], future: [...canvasHistoryRef.current.future] },
+      savedContentKey: activeTab?.savedContentKey ?? tab.savedContentKey,
+    }));
+    runtimeFilesRef.current.clear();
+    const targetNodes = target.nodes.map((node) => ({ ...node, hidden: false, selected: node.id === target.selectedId }));
+    setWorkflowName(target.name);
+    setWorkflowPath(target.filePath);
+    setWorkflowId(target.workflowId);
+    setWorkflowInterface(target.workflowInterface);
+    setNodes(targetNodes);
+    setEdges(target.edges);
+    setWorkflowGroups(target.groups);
+    setSelectedId(target.selectedId);
+    canvasHistoryRef.current = { past: [...target.history.past], future: [...target.history.future] };
+    syncCanvasSnapshot(targetNodes, target.edges, target.selectedId, target.groups);
+    setWorkflowCheck([]);
+    setWorkflowCheckSummary(null);
+    setActiveWorkflowTabId(targetTabId);
+    setCanvasClosed(false);
+    setNotice(`Đã chuyển sang workflow “${target.name}”.`);
+    setTimeout(() => fitView({ padding: 0.15, duration: 350 }), 50);
+  }, [activeWorkflowTabId, edges, fitView, nodes, runState, selectedId, syncCanvasSnapshot, workflowGroups, workflowId, workflowInterface, workflowName, workflowPath, workflowTabs]);
+
+  const createNewWorkflowTab = useCallback(() => {
+    if (runState !== "idle") {
+      setNotice("Không thể tạo workflow mới khi workflow hiện tại đang chạy.");
+      return;
+    }
+    const newWorkflowId = createWorkflowId();
+    const baseTab: Omit<WorkflowTab, "savedContentKey"> = {
+      id: createWorkflowTabId(), name: "New workflow", filePath: null, workflowId: newWorkflowId, workflowInterface: undefined,
+      nodes: initialNodes.map((node) => ({ ...node, selected: false })), edges: initialEdges, groups: [], selectedId: null,
+      history: { past: [], future: [] },
+    };
+    const nextTab: WorkflowTab = { ...baseTab, savedContentKey: workflowTabContentKey(baseTab) };
+    setWorkflowTabs((tabs) => tabs.concat(nextTab));
+    runtimeFilesRef.current.clear();
+    setWorkflowName(nextTab.name);
+    setWorkflowPath(null);
+    setWorkflowId(nextTab.workflowId);
+    setWorkflowInterface(undefined);
+    setNodes(nextTab.nodes);
+    setEdges(nextTab.edges);
+    setWorkflowGroups([]);
+    setSelectedId(null);
+    resetCanvasHistory(nextTab.nodes, nextTab.edges, null, []);
+    setActiveWorkflowTabId(nextTab.id);
+    setCanvasClosed(false);
+    setNotice("Đã tạo workflow mới trong tab riêng.");
+    setTimeout(() => fitView({ padding: 0.15, duration: 350 }), 50);
+  }, [fitView, resetCanvasHistory, runState, setEdges, setNodes]);
+
+  const closeWorkflowTab = useCallback((tabId: string) => {
+    const tab = workflowTabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    const tabDirty = tab.id === activeWorkflowTabId
+      ? activeWorkflowDirty
+      : workflowTabContentKey(tab) !== tab.savedContentKey;
+    if (tabDirty && !window.confirm(`Workflow “${tab.name}” chưa lưu. Đóng tab này?`)) return;
+    if (tab.id !== activeWorkflowTabId) {
+      setWorkflowTabs((tabs) => tabs.filter((item) => item.id !== tabId));
+      setNotice(`Đã đóng tab workflow “${tab.name}”.`);
+      return;
+    }
+    if (runState !== "idle") {
+      setNotice("Không thể đóng workflow đang chạy. Hãy dừng workflow trước.");
+      return;
+    }
+    const remaining = workflowTabs.filter((item) => item.id !== tabId);
+    if (!remaining.length) {
+      runtimeFilesRef.current.clear();
+      setWorkflowTabs([]);
+      setSelectedId(null);
+      setCanvasClosed(true);
+      setNotice("Đã đóng workflow cuối cùng.");
+      return;
+    }
+    const target = remaining.at(-1)!;
+    setWorkflowTabs(remaining);
+    runtimeFilesRef.current.clear();
+    const targetNodes = target.nodes.map((node) => ({ ...node, hidden: false, selected: node.id === target.selectedId }));
+    setWorkflowName(target.name);
+    setWorkflowPath(target.filePath);
+    setWorkflowId(target.workflowId);
+    setWorkflowInterface(target.workflowInterface);
+    setNodes(targetNodes);
+    setEdges(target.edges);
+    setWorkflowGroups(target.groups);
+    setSelectedId(target.selectedId);
+    canvasHistoryRef.current = { past: [...target.history.past], future: [...target.history.future] };
+    syncCanvasSnapshot(targetNodes, target.edges, target.selectedId, target.groups);
+    setActiveWorkflowTabId(target.id);
+    setNotice(`Đã đóng “${tab.name}” và chuyển sang “${target.name}”.`);
+  }, [activeWorkflowDirty, activeWorkflowTabId, runState, syncCanvasSnapshot, workflowTabs]);
+
   const selectedNode = useMemo(() => nodes.find((node) => node.id === selectedId) ?? null, [nodes, selectedId]);
   const selectedOutputText = useMemo(
     () => selectedNode?.data.output ? JSON.stringify(selectedNode.data.output, null, 2) : "",
@@ -3044,6 +3216,20 @@ function WorkflowApp() {
   useEffect(() => {
     syncCanvasSnapshot(nodes, edges, selectedId, workflowGroups);
   }, [edges, nodes, selectedId, syncCanvasSnapshot, workflowGroups]);
+  useEffect(() => {
+    setWorkflowTabs((current) => current.map((tab) => tab.id !== activeWorkflowTabId ? tab : {
+      ...tab,
+      name: workflowName,
+      filePath: workflowPath,
+      workflowId,
+      workflowInterface,
+      nodes,
+      edges,
+      groups: workflowGroups,
+      selectedId,
+      history: { past: [...canvasHistoryRef.current.past], future: [...canvasHistoryRef.current.future] },
+    }));
+  }, [activeWorkflowTabId, edges, nodes, selectedId, workflowGroups, workflowId, workflowInterface, workflowName, workflowPath]);
   useEffect(() => {
     const existingIds = new Set(nodes.map((node) => node.id));
     setWorkflowGroups((current) => {
@@ -3393,6 +3579,22 @@ function WorkflowApp() {
         setEdges(normalizedEdges);
         setWorkflowGroups(groups);
         resetCanvasHistory(visibleNodes, normalizedEdges, null, groups);
+        setWorkflowTabs((current) => current.map((tab) => {
+          if (tab.id !== activeWorkflowTabId) return tab;
+          const restoredTab = {
+            ...tab,
+            name: filePath ? workflowNameFromPath(filePath) : parsed.name?.trim() || "New workflow",
+            filePath,
+            workflowId: restoredWorkflowId,
+            workflowInterface: parsed.workflowInterface,
+            nodes: visibleNodes,
+            edges: normalizedEdges,
+            groups,
+            selectedId: null,
+            history: { past: [], future: [] },
+          };
+          return { ...restoredTab, savedContentKey: workflowTabContentKey(restoredTab) };
+        }));
         setNotice(repairedWorkflow.repaired
           ? `Đã khôi phục workflow và sửa ${repairedWorkflow.repaired} node có ID trùng.`
           : "Đã khôi phục workflow gần nhất trên máy này.");
@@ -3400,7 +3602,7 @@ function WorkflowApp() {
     } catch {
       setNotice("Không thể đọc bản lưu cũ; canvas đang để trống.");
     }
-  }, [resetCanvasHistory, setEdges, setNodes]);
+  }, [activeWorkflowTabId, resetCanvasHistory, setEdges, setNodes]);
 
   useEffect(() => {
     setRecentWorkflows(readRecentWorkflows());
@@ -3454,10 +3656,25 @@ function WorkflowApp() {
     setWorkflowInterface(savedWorkflow.workflowInterface);
     setWorkflowPath(result.path);
     syncRecentWorkflowPath(workflowPath, result.path, savedName);
+    setWorkflowTabs((current) => current.map((tab) => {
+      if (tab.id !== activeWorkflowTabId) return tab;
+      const savedTab = {
+        ...tab,
+        name: savedName,
+        filePath: result.path,
+        workflowId: typeof savedWorkflow.workflowId === "string" ? savedWorkflow.workflowId : workflowId,
+        workflowInterface: savedWorkflow.workflowInterface,
+        nodes,
+        edges,
+        groups: workflowGroups,
+        selectedId,
+      };
+      return { ...savedTab, savedContentKey: workflowTabContentKey(savedTab) };
+    }));
     localStorage.setItem("content-flow-workspace-v5", JSON.stringify({ ...savedWorkflow, filePath: result.path }));
     setNotice(saveAs ? `Đã lưu workflow mới: ${result.path}` : `Đã lưu workflow: ${result.path}`);
     return true;
-  }, [edges, nodes, syncRecentWorkflowPath, workflowGroups, workflowId, workflowInterface, workflowName, workflowPath]);
+  }, [activeWorkflowTabId, edges, nodes, selectedId, syncRecentWorkflowPath, workflowGroups, workflowId, workflowInterface, workflowName, workflowPath]);
 
   const rememberRecentWorkflow = useCallback((filePath: string, name: string) => {
     const next = [
@@ -3485,16 +3702,49 @@ function WorkflowApp() {
       const typedNodes = inheritStorageOutputTypes(refreshedNodes, normalizedEdges);
       const visibleNodes = typedNodes.map((node) => node.hidden ? { ...node, hidden: false } : node);
       const groups = normalizeWorkflowGroups(parsed.groups, visibleNodes);
+      const loadedWorkflowId = typeof parsed.workflowId === "string" && parsed.workflowId.trim() ? parsed.workflowId : createWorkflowId();
+      const existingTab = filePath ? workflowTabs.find((tab) => tab.filePath === filePath) : undefined;
+      if (existingTab) {
+        switchWorkflowTab(existingTab.id);
+        setNotice(`Workflow “${existingTab.name}” đã được mở ở tab khác.`);
+        return true;
+      }
+      const baseTab: Omit<WorkflowTab, "savedContentKey"> = {
+        id: createWorkflowTabId(),
+        name,
+        filePath,
+        workflowId: loadedWorkflowId,
+        workflowInterface: parsed.workflowInterface,
+        nodes: visibleNodes,
+        edges: normalizedEdges,
+        groups,
+        selectedId: null,
+        history: { past: [], future: [] },
+      };
+      const nextTab: WorkflowTab = { ...baseTab, savedContentKey: workflowTabContentKey(baseTab) };
+      const previousHistory = { past: [...canvasHistoryRef.current.past], future: [...canvasHistoryRef.current.future] };
       runtimeFilesRef.current.clear();
       setWorkflowName(name);
       setWorkflowPath(filePath);
-      const loadedWorkflowId = typeof parsed.workflowId === "string" && parsed.workflowId.trim() ? parsed.workflowId : createWorkflowId();
       setWorkflowId(loadedWorkflowId);
       setWorkflowInterface(parsed.workflowInterface);
       setNodes(visibleNodes);
       setEdges(normalizedEdges);
       setWorkflowGroups(groups);
       resetCanvasHistory(visibleNodes, normalizedEdges, null, groups);
+      setWorkflowTabs((current) => current.map((tab) => tab.id !== activeWorkflowTabId ? tab : {
+        ...tab,
+        name: workflowName,
+        filePath: workflowPath,
+        workflowId,
+        workflowInterface,
+        nodes,
+        edges,
+        groups: workflowGroups,
+        selectedId,
+        history: previousHistory,
+      }).concat(nextTab));
+      setActiveWorkflowTabId(nextTab.id);
       localStorage.setItem("content-flow-workspace-v5", JSON.stringify({ version: 6, name, workflowId: loadedWorkflowId, workflowInterface: parsed.workflowInterface, nodes: visibleNodes, edges: normalizedEdges, groups, filePath }));
       if (filePath) rememberRecentWorkflow(filePath, name);
       // Mọi nguồn mở workflow (gần đây, hộp tìm file, import) đều phải đưa
@@ -3509,7 +3759,7 @@ function WorkflowApp() {
       setNotice("Tệp workflow không hợp lệ.");
       return false;
     }
-  }, [fitView, rememberRecentWorkflow, resetCanvasHistory, setEdges, setNodes]);
+  }, [activeWorkflowTabId, edges, fitView, nodes, rememberRecentWorkflow, resetCanvasHistory, selectedId, setEdges, setNodes, switchWorkflowTab, workflowGroups, workflowId, workflowInterface, workflowName, workflowPath, workflowTabs]);
 
   const openWorkflow = useCallback(async (): Promise<boolean> => {
     if (!window.contentFlowDesktop?.openWorkflow) {
@@ -3614,21 +3864,16 @@ function WorkflowApp() {
   }, [openWorkflow]);
 
   const closeWorkflow = useCallback(() => {
-    // Đóng workflow là đóng tài liệu đang làm việc, không chỉ che canvas.
-    // Dữ liệu vẫn nằm trong tệp đã lưu; các vùng làm việc và điều khiển tài liệu
-    // bị gỡ khỏi giao diện cho đến khi người dùng tạo mới hoặc mở workflow khác.
-    if (runState !== "idle") stopWorkflowRef.current();
-    runtimeFilesRef.current.clear();
+    // Khi đã có nhiều tab, Đóng chỉ đóng tab đang hoạt động. Canvas khác vẫn
+    // giữ nguyên node, selection và lịch sử riêng của chúng.
     setOpenMenu(null);
     setQuickAddOpen(false);
     setOpenWorkflowDialog(false);
     setOpenWorkflowDialogError(null);
     setPendingConnection(null);
     setManualPortFilter(null);
-    setSelectedId(null);
-    setCanvasClosed(true);
-    setNotice("Đã đóng workflow. Mở một workflow hoặc tạo workflow mới để tiếp tục.");
-  }, [runState]);
+    closeWorkflowTab(activeWorkflowTabId);
+  }, [activeWorkflowTabId, closeWorkflowTab]);
 
   const isValidConnection = useCallback(
     (connection: Connection | Edge) => {
@@ -3894,8 +4139,7 @@ function WorkflowApp() {
         }
         if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "n") {
           event.preventDefault();
-          setCanvasClosed(false);
-          setConfirmAction("reset");
+          createNewWorkflowTab();
           return;
         }
         return;
@@ -3922,8 +4166,7 @@ function WorkflowApp() {
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "n") {
         event.preventDefault();
-        setCanvasClosed(false);
-        setConfirmAction("reset");
+        createNewWorkflowTab();
         return;
       }
       if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "z") {
@@ -3984,7 +4227,7 @@ function WorkflowApp() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [canvasClosed, closeWorkflow, copyCanvasSelection, createWorkflowGroup, fitView, openQuickAdd, pasteCanvasSelection, redoCanvasChange, saveWorkflow, showOpenWorkflowDialog, toggleSelectedNodePause, undoCanvasChange, ungroupSelectedNodes]);
+  }, [canvasClosed, closeWorkflow, copyCanvasSelection, createNewWorkflowTab, createWorkflowGroup, fitView, openQuickAdd, pasteCanvasSelection, redoCanvasChange, saveWorkflow, showOpenWorkflowDialog, toggleSelectedNodePause, undoCanvasChange, ungroupSelectedNodes]);
 
   useEffect(() => {
     const closeMenuOutside = (event: PointerEvent) => {
@@ -4233,6 +4476,52 @@ function WorkflowApp() {
     setNotice(`Đã đồng bộ ${workflowInterface.inputs.length} cổng vào và ${workflowInterface.outputs.length} cổng ra từ workflow đang mở “${workflowName.trim() || "Workflow hiện tại"}”.`);
   }, [nodes, rememberCanvasChange, workflowId, workflowName]);
 
+  const syncOpenWorkflowReference = useCallback((nodeId: string, targetTabId: string) => {
+    const target = targetTabId === activeWorkflowTabId
+      ? {
+        id: activeWorkflowTabId,
+        name: workflowName,
+        workflowId,
+        workflowInterface: workflowInterfaceFromNodes(nodes),
+      }
+      : workflowTabs.find((tab) => tab.id === targetTabId);
+    if (!target) {
+      setNotice("Workflow đang mở đã không còn tồn tại. Hãy chọn lại workflow cần gọi.");
+      return;
+    }
+    const workflowInterface = normalizeWorkflowInterfaceShape(target.workflowInterface);
+    const reference: CalledWorkflowReference = {
+      source: "open-tab",
+      path: `open-tab://${target.id}`,
+      tabId: target.id,
+      workflowId: target.workflowId,
+      workflowInterface,
+    };
+    const callPorts = portsForCalledWorkflow(workflowInterface);
+    rememberCanvasChange();
+    setEdges((current) => current.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+    setNodes((current) => current.map((node) => node.id === nodeId ? {
+      ...node,
+      data: {
+        ...node.data,
+        calledWorkflow: reference,
+        inputs: callPorts.inputs,
+        outputs: callPorts.outputs,
+        config: {
+          ...node.data.config,
+          workflowPath: `${target.name || "Workflow"} (tab đang mở)`,
+          workflowPathPaths: "",
+          openWorkflowTabId: target.id,
+        },
+        validationError: undefined,
+        status: "idle",
+        beacon: "uncheck",
+        output: undefined,
+      },
+    } : node));
+    setNotice(`Đã đồng bộ ${workflowInterface.inputs.length} cổng vào và ${workflowInterface.outputs.length} cổng ra từ tab “${target.name || "Workflow"}”.`);
+  }, [activeWorkflowTabId, nodes, rememberCanvasChange, workflowId, workflowName, workflowTabs]);
+
   const executeWorkflowCallNode = useCallback(async (
     initialNode: ContentFlowNode,
     initialInputs: Record<string, unknown>,
@@ -4245,6 +4534,13 @@ function WorkflowApp() {
       nodes,
       edges,
     };
+    const openDocuments = new Map(workflowTabs.map((tab) => [tab.id, {
+      workflowId: tab.workflowId,
+      workflowInterface: normalizeWorkflowInterfaceShape(tab.workflowInterface),
+      nodes: tab.nodes,
+      edges: tab.edges,
+    }]));
+    openDocuments.set(activeWorkflowTabId, currentDocument);
     const visit = async (node: ContentFlowNode | WorkflowDocumentLike["nodes"][number], inputs: Record<string, unknown>): Promise<Record<string, unknown>> => {
       const extended = node as typeof node & { data: { calledWorkflow?: CalledWorkflowReference; config: Record<string, FieldValue> } };
       const reference = extended.data.calledWorkflow;
@@ -4252,9 +4548,16 @@ function WorkflowApp() {
       if (!configuredPath) throw new Error(`Node “${extended.data.label}” chưa chọn workflow .tess cần gọi.`);
       if (context.stack.length >= 32) throw new Error(`Workflow gọi lồng vượt độ sâu an toàn 32: ${[...context.stack, configuredPath].join(" → ")}`);
       if (context.calls >= 500) throw new Error(`Workflow gọi lồng vượt giới hạn an toàn 500 lần trong một lượt chạy.`);
-      const loaded: { path?: string; workflow?: unknown; error?: string } = reference?.source === "current" || configuredPath === `current://${workflowId}`
-        ? { path: configuredPath, workflow: currentDocument }
-        : await window.contentFlowDesktop?.readWorkflowAtPath(configuredPath);
+      const openTabId = reference?.source === "open-tab"
+        ? reference.tabId ?? String(extended.data.config.openWorkflowTabId ?? "")
+        : configuredPath.startsWith("open-tab://") ? configuredPath.slice("open-tab://".length) : "";
+      const loaded: { path?: string; workflow?: unknown; error?: string } = openTabId
+        ? openDocuments.has(openTabId)
+          ? { path: `open-tab://${openTabId}`, workflow: openDocuments.get(openTabId) }
+          : { error: "Workflow đang mở được gọi không còn tồn tại. Hãy chọn lại tại node Gọi workflow." }
+        : reference?.source === "current" || configuredPath === `current://${workflowId}`
+          ? { path: configuredPath, workflow: currentDocument }
+          : await window.contentFlowDesktop?.readWorkflowAtPath(configuredPath);
       if (!loaded?.workflow || !loaded.path || loaded.error) throw new Error(loaded?.error || `Không thể đọc workflow cần gọi: ${configuredPath}`);
       const document = loaded.workflow as WorkflowDocumentLike & { workflowId?: unknown; workflowInterface?: unknown };
       if (!Array.isArray(document.nodes) || !Array.isArray(document.edges) || typeof document.workflowId !== "string") throw new Error(`Workflow cần gọi “${workflowNameFromPath(configuredPath)}” không hợp lệ hoặc chưa được lưu bằng Tesseract.`);
@@ -4274,7 +4577,7 @@ function WorkflowApp() {
       }
     };
     return visit(initialNode, initialInputs);
-  }, [edges, nodes, workflowId]);
+  }, [activeWorkflowTabId, edges, nodes, workflowId, workflowTabs]);
 
   const updatePersistedFiles = useCallback(async (field: ConfigField) => {
     if (!selectedNode || !selectedId) return;
@@ -4857,7 +5160,7 @@ function WorkflowApp() {
             <div className="menu-group">
               <button aria-expanded={openMenu === "file"} onClick={() => setOpenMenu((current) => current === "file" ? null : "file")}>Tệp</button>
               {openMenu === "file" && <div className="menu-popover" role="menu">
-                <button onClick={() => { setOpenMenu(null); setConfirmAction("reset"); }}><span>Workflow mới</span><kbd>Ctrl+N</kbd></button>
+                <button onClick={() => { setOpenMenu(null); createNewWorkflowTab(); }}><span>Workflow mới</span><kbd>Ctrl+N</kbd></button>
                 <button onClick={showOpenWorkflowDialog}><span>Mở workflow</span><kbd>Ctrl+O</kbd></button>
                 <button disabled={canvasClosed} onClick={() => { setOpenMenu(null); exportWorkflow(); }}><span>Xuất workflow</span></button>
                 <i />
@@ -4921,7 +5224,7 @@ function WorkflowApp() {
             />
           </div>
           <div className="top-actions">
-            <button className="menu-action" title="Workflow mới (Ctrl+N)" onClick={() => setConfirmAction("reset")}>Mới</button>
+            <button className="menu-action" title="Workflow mới trong tab riêng (Ctrl+N)" onClick={createNewWorkflowTab}>Mới</button>
             <button className="menu-action" title="Mở workflow (Ctrl+O)" onClick={showOpenWorkflowDialog}>Mở</button>
             <input ref={importRef} type="file" accept=".tess,application/json,.json" hidden onChange={(event) => { importWorkflow(event.target.files?.[0]); event.currentTarget.value = ""; }} />
             <button className="menu-action" onClick={exportWorkflow}>Xuất</button>
@@ -4938,6 +5241,23 @@ function WorkflowApp() {
         </div>
       </header>
 
+      {!canvasClosed && <nav className="workflow-tabs" aria-label="Các workflow đang mở">
+        {workflowTabs.map((tab) => {
+          const tabDirty = tab.id === activeWorkflowTabId
+            ? activeWorkflowDirty
+            : workflowTabContentKey(tab) !== tab.savedContentKey;
+          return (
+            <div key={tab.id} className={`workflow-tab ${tab.id === activeWorkflowTabId ? "active" : ""}`}>
+              <button type="button" className="workflow-tab-select" onClick={() => switchWorkflowTab(tab.id)} title={tab.filePath ?? "Workflow chưa lưu"}>
+                <span>{tabDirty ? "●" : ""}</span>{tab.name || "New workflow"}
+              </button>
+              <button type="button" className="workflow-tab-close" aria-label={`Đóng workflow ${tab.name}`} title="Đóng workflow" onClick={(event) => { event.stopPropagation(); closeWorkflowTab(tab.id); }}>×</button>
+            </div>
+          );
+        })}
+        <button type="button" className="workflow-tab-new" title="Mở workflow mới trong tab khác" onClick={createNewWorkflowTab}>＋</button>
+      </nav>}
+
       {canvasClosed ? (
         <section className="canvas-closed-screen" aria-label="Workflow đã đóng">
           <div>
@@ -4945,7 +5265,7 @@ function WorkflowApp() {
             <h1>Workflow đã đóng</h1>
             <p>Canvas, thư viện node, Properties và các điều khiển workflow đã đóng. Tạo workflow mới hoặc mở một workflow đã lưu để tiếp tục.</p>
             <div className="canvas-closed-actions">
-              <button type="button" onClick={() => { setCanvasClosed(false); setConfirmAction("reset"); }}>Tạo mới <kbd>Ctrl+N</kbd></button>
+              <button type="button" onClick={createNewWorkflowTab}>Tạo mới <kbd>Ctrl+N</kbd></button>
               <button type="button" onClick={showOpenWorkflowDialog}>Mở <kbd>Ctrl+O</kbd></button>
             </div>
           </div>
@@ -5336,13 +5656,20 @@ function WorkflowApp() {
                     onChange={(event) => updateNodeIdentity("label", event.target.value)}
                   />
                 </label>
-                {nodeFamilyOf(selectedNode) === "Gọi workflow" && selectedNode.data.config.workflowTargetMode === "Workflow đang mở (đã lưu)" && (
+                {nodeFamilyOf(selectedNode) === "Gọi workflow" && selectedNode.data.config.workflowTargetMode === "Workflow đang mở" && (
                   <section className="workflow-current-reference" aria-label="Workflow đang mở">
                     <div>
                       <strong>Workflow đang mở</strong>
-                      <small>Dùng snapshot canvas hiện tại. Có thể gọi lại chính workflow này; dây tại node gọi sẽ được đồng bộ lại theo Cổng vào/Cổng ra.</small>
+                      <small>Chọn bất kỳ tab đang mở, kể cả tab hiện tại để tự gọi. Cổng sẽ được đồng bộ lại theo Cổng vào/Cổng ra của workflow đó.</small>
                     </div>
-                    <button type="button" onClick={() => syncCurrentWorkflowReference(selectedNode.id)}>Dùng workflow đang mở</button>
+                    <select
+                      aria-label="Workflow đang mở cần gọi"
+                      value={selectedNode.data.calledWorkflow?.source === "open-tab" ? selectedNode.data.calledWorkflow.tabId ?? activeWorkflowTabId : activeWorkflowTabId}
+                      onChange={(event) => syncOpenWorkflowReference(selectedNode.id, event.target.value)}
+                    >
+                      {workflowTabs.map((tab) => <option key={tab.id} value={tab.id}>{tab.name || "New workflow"}{tab.id === activeWorkflowTabId ? " (tab hiện tại)" : ""}</option>)}
+                    </select>
+                    <button type="button" onClick={() => syncOpenWorkflowReference(selectedNode.id, selectedNode.data.calledWorkflow?.source === "open-tab" ? selectedNode.data.calledWorkflow.tabId ?? activeWorkflowTabId : activeWorkflowTabId)}>Đồng bộ workflow đã chọn</button>
                   </section>
                 )}
                 {isWorkflowGatewayNode(selectedNode) && (() => {

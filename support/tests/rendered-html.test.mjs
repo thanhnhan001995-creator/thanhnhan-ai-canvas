@@ -47,8 +47,10 @@ test("defines typed workflow nodes and local persistence", async () => {
   assert.match(page, /workflowNameFromPath\(file\.name\)/);
   assert.match(page, /executeWorkflowNode/);
   assert.match(page, /executeCalledWorkflow/);
-  assert.match(page, /Workflow đang mở \(đã lưu\)/);
+  assert.match(page, /Workflow đang mở/);
   assert.match(page, /syncCurrentWorkflowReference/);
+  assert.match(page, /syncOpenWorkflowReference/);
+  assert.match(page, /workflow-tabs/);
   assert.match(page, /Sao chép output/);
   assert.match(page, /className="brand-mark" src="\/tesseract-icon\.svg"/);
   assert.match(page, /navigator\.clipboard\?\.writeText/);

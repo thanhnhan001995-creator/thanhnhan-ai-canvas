@@ -1718,6 +1718,15 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm test` — build thành công, **48/48** bài kiểm tra đạt; thêm kiểm thử truyền dữ liệu qua Cổng vào/Cổng ra và gọi workflow lồng qua resolver.
 
+## 2026-10-31 +07:00 — REC-04: Mở nhiều workflow
+
+- Thêm thanh tab workflow. Mở `.tess` mới tạo một tab riêng; nếu tệp đã mở, app chuyển về đúng tab thay vì nạp đè canvas đang xem. Nút `Mới`/`Ctrl+N` cũng tạo tab riêng.
+- Mỗi tab giữ canvas, dây, nhóm, node đang chọn, undo/redo, đường dẫn và mốc lưu riêng. Khi chuyển tab, runtime file tạm được nạp lại theo tab mới để không lẫn dữ liệu giao diện; chỉ tab đang hoạt động được render lên canvas.
+- Tab hiện dấu vàng khi có thay đổi chưa lưu; lưu workflow cập nhật đúng mốc của tab đó. Đóng tab chưa lưu yêu cầu xác nhận; đóng tab đang hoạt động chuyển sang tab còn lại, chỉ hiện màn hình đóng khi không còn tab nào.
+- Node `Gọi workflow` ở chế độ Workflow đang mở có danh sách các tab, có thể tham chiếu và chạy một workflow đang mở khác hoặc chính tab hiện tại. Dữ liệu runtime của tab đang gọi được ưu tiên, tránh dùng snapshot giao diện cũ.
+
+**Kiểm tra:** `npm test` — build thành công, **48/48** bài kiểm tra đạt; test SSR kiểm tra các điểm neo của thanh tab và đường đồng bộ workflow đang mở.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 
