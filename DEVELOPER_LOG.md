@@ -1766,6 +1766,14 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm test` — build thành công, **55/55** bài kiểm tra đạt.
 
+## 2026-10-31 +07:00 — Khôi phục quyền đọc workflow trong Tesseract Desktop
+
+- **Vấn đề:** node **Gọi workflow** báo sai rằng chỉ dùng được trong Tesseract Desktop, dù người dùng đã mở đúng từ `Run_App`.
+- **Nguyên nhân:** cửa sổ Electron dùng `desktop/preload.cjs`, nhưng cầu nối `readWorkflowAtPath` chỉ có trong `preload.mjs`; giao diện vì vậy không thấy hàm đọc `.tess`.
+- **Thực hiện:** bổ sung `readWorkflowAtPath` vào đúng preload `.cjs` và kiểm thử hồi quy rằng preload cùng main process đều có kênh IPC này.
+- **Kết quả mong đợi:** chọn `.tess` trong node Gọi workflow sẽ đọc file, đồng bộ các cổng Cổng vào/Cổng ra và không còn báo nhầm là ngoài Desktop.
+- **Kiểm tra:** `npm test` — build thành công, **56/56** bài kiểm tra đạt.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 

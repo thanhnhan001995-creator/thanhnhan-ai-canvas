@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld("contentFlowDesktop", {
   readFiles: (paths) => ipcRenderer.invoke("content-flow:read-files", paths),
   openWorkflow: () => ipcRenderer.invoke("content-flow:open-workflow"),
   openRecentWorkflow: (filePath) => ipcRenderer.invoke("content-flow:open-recent-workflow", filePath),
+  readWorkflowAtPath: (filePath) => ipcRenderer.invoke("content-flow:read-workflow-at-path", filePath),
   saveWorkflow: (request) => ipcRenderer.invoke("content-flow:save-workflow", request),
   onCloseCanvas: (callback) => {
     const listener = () => callback();

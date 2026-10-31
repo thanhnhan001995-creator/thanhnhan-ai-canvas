@@ -486,6 +486,15 @@ test("source Run_App uses a separate development server instead of stale dist", 
   assert.match(launcher, /\[runMode, "--port", String\(appPort\)\]/);
 });
 
+test("Electron preload exposes the workflow reader used by Gọi workflow", async () => {
+  const [main, preload] = await Promise.all([
+    readFile(new URL("../../desktop/main.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../../desktop/preload.cjs", import.meta.url), "utf8"),
+  ]);
+  assert.match(main, /ipcMain\.handle\("content-flow:read-workflow-at-path"/);
+  assert.match(preload, /readWorkflowAtPath: \(filePath\) => ipcRenderer\.invoke\("content-flow:read-workflow-at-path", filePath\)/);
+});
+
 test("runtime AI calls require a key supplied by a workflow node, never .env", async () => {
   const [route, client, service, launcher, page] = await Promise.all([
     readFile(new URL("../../app/api/research/route.ts", import.meta.url), "utf8"),
