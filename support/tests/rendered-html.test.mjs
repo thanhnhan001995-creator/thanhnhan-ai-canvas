@@ -160,7 +160,11 @@ test("defines typed workflow nodes and local persistence", async () => {
   assert.match(page, /toggleWorkflowGroupVisibility/);
   assert.match(page, /className="outliner-resizer"/);
   assert.match(page, /const resizeOutliner =/);
-  assert.match(page, /version: 6, name, workflowId, workflowInterface, nodes, edges, groups/);
+  assert.match(page, /version: 6, name, workflowId, workflowInterface: workflowInterfaceFromNodes\(nodes\), nodes, edges, groups/);
+  assert.match(page, /kind: "workflow-input-gateway"/);
+  assert.match(page, /kind: "workflow-output-gateway"/);
+  assert.match(page, /workflow-gateway-editor/);
+  assert.match(page, /updateWorkflowGatewayPorts/);
   assert.match(css, /\.workflow-group-head/);
   assert.match(css, /\.outliner-resizer/);
   assert.match(css, /\.workflow-group\.collapsed/);

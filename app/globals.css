@@ -306,6 +306,18 @@ button { color: inherit; }
   padding: 9px 10px; outline: none; font-size: 11px; resize: vertical;
 }
 .config-form input:focus, .config-form textarea:focus, .config-form select:focus { border-color: var(--purple); box-shadow: 0 0 0 2px rgba(124,92,255,.1); }
+.workflow-gateway-editor { display: flex; flex-direction: column; gap: 9px; padding: 11px; border: 1px solid rgba(125, 92, 255, .42); border-radius: 9px; background: rgba(91, 74, 156, .12); }
+.workflow-gateway-editor > div:first-child { display: flex; flex-direction: column; gap: 3px; }
+.workflow-gateway-editor strong { color: #dfd7ff; font-size: 11px; }
+.workflow-gateway-editor small, .gateway-empty-state { margin: 0; color: #a7a0c3; font-size: 10px; line-height: 1.45; }
+.workflow-gateway-port { display: grid; grid-template-columns: minmax(0, 1fr) minmax(86px, .75fr); gap: 6px; padding-top: 9px; border-top: 1px solid rgba(169, 154, 255, .18); }
+.workflow-gateway-port .gateway-required { grid-column: 1 / -1; display: inline-flex; align-items: center; gap: 6px; color: #b8c3d2; font-size: 10px; cursor: pointer; }
+.workflow-gateway-port .gateway-required input { width: auto; margin: 0; }
+.gateway-port-actions { grid-column: 1 / -1; display: flex; gap: 5px; justify-content: flex-end; }
+.gateway-port-actions button, .add-workflow-gateway-port { border: 1px solid #57517d; border-radius: 6px; background: #26213d; color: #e0d9ff; padding: 5px 8px; font-size: 10px; font-weight: 700; cursor: pointer; }
+.gateway-port-actions button:disabled { opacity: .4; cursor: default; }
+.gateway-port-actions button:last-child { color: #ffadb9; border-color: #75414d; background: #2d1d24; }
+.add-workflow-gateway-port { align-self: flex-start; color: #cdbdff; }
 .config-field { min-width: 0; }
 .config-field-block { min-width: 0; }
 .config-section-divider { border-top: 1px solid #3d4652; margin: 14px 0 12px; }

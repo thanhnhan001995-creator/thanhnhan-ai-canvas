@@ -3217,6 +3217,12 @@ export async function executeWorkflowNode(
     return executeBasicWorkflowNode(node, inputs, store, reportProgress);
   }
   if (node.data.category === "Đầu vào") return await executeInput(node, store);
+  // Gateway không xử lý dữ liệu mới: Cổng vào phát lại các giá trị caller đã
+  // bơm theo ID cổng; Cổng ra giữ gói giá trị để executor workflow cha thu lại.
+  if (node.data.label === "Cổng vào") {
+    return Object.fromEntries(node.data.outputs.flatMap((port) => inputs[port.id] === undefined ? [] : [[port.id, inputs[port.id]]]));
+  }
+  if (node.data.label === "Cổng ra") return { workflowOutputs: inputs };
   if (["Chọn nhà cung cấp AI", "Chọn mô hình AI"].includes(node.data.label)) return executeAiConfigurationNode(node, inputs);
   if (node.data.label === "Cache kết quả") return output(node, cacheMaterials(node, inputs));
   if (node.data.label === "Lựa chọn model AI") return executeAiModelSelectionNode(node, inputs);

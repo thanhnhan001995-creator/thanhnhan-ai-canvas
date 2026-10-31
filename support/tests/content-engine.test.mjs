@@ -339,10 +339,18 @@ test("execution capability is explicit for both supported and blocked node catal
   assert.equal(hasNodeExecutor("Tách âm thanh từ video", "Video"), true);
   assert.equal(hasNodeExecutor("Chấm điểm đầu ra AI", "AI & mô hình"), true);
   assert.equal(hasNodeExecutor("Duyệt đầu ra AI", "AI & mô hình"), true);
+  assert.equal(hasNodeExecutor("Cổng vào", "Điều khiển workflow"), true);
+  assert.equal(hasNodeExecutor("Cổng ra", "Điều khiển workflow"), true);
   assert.equal(hasNodeExecutor("Tạo transcript video theo thời gian", "Nghiên cứu"), true);
   assert.equal(hasNodeExecutor("Trích xuất transcript video", "Nghiên cứu"), false);
   assert.equal(hasNodeExecutor("Tạo ảnh bằng AI", "Hình ảnh"), false);
   assert.equal(hasNodeExecutor("Render video chính", "Dựng video tổng"), false);
+});
+
+test("workflow input gateway replays caller values by stable port ID", async () => {
+  const node = workflowNode("Cổng vào", [], ["Text"]);
+  const result = await executeWorkflowNode(node, { "output-1": "Dữ liệu từ workflow cha" }, new Map());
+  assert.deepEqual(result, { "output-1": "Dữ liệu từ workflow cha" });
 });
 
 test("model capabilities identify image support and only send reasoning to compatible OpenAI models", () => {

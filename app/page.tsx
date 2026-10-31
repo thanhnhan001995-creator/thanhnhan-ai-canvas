@@ -420,6 +420,8 @@ interface ContentNodeData extends Record<string, unknown> {
   basicMode?: "pipeline" | "choice";
   basicNodeLabels?: string[];
   basicSteps?: BasicStep[];
+  /** Cổng do người dùng định nghĩa cho Cổng vào/Cổng ra workflow. */
+  workflowPorts?: WorkflowGatewayPort[];
   /** File đã được node Lưu file ghi thành công và có thể tái sử dụng. */
   storedFiles?: StoredFileReference[];
   validationError?: string;
@@ -438,6 +440,81 @@ type WorkflowGroup = {
   /** Thu gọn/mở các node con trong cửa sổ Workflow. */
   collapsed: boolean;
 };
+
+type WorkflowGatewayPort = {
+  /** ID ổn định: đổi tên hoặc sắp thứ tự không làm đứt dây/caller đã lưu. */
+  id: string;
+  name: string;
+  type: string;
+  required: boolean;
+  description?: string;
+};
+
+type WorkflowInterfaceShape = {
+  version: 1;
+  inputs: WorkflowGatewayPort[];
+  outputs: WorkflowGatewayPort[];
+};
+
+const WORKFLOW_INPUT_GATEWAY_FAMILY = "Cổng vào";
+const WORKFLOW_OUTPUT_GATEWAY_FAMILY = "Cổng ra";
+const WORKFLOW_PORT_TYPE_SUGGESTIONS = [
+  "Dữ liệu", "Text", "JSON", "Boolean", "Number", "Condition", "Prompt",
+  "File[]", "Document[]", "Image[]", "Audio", "Video", "Folder", "URL[]",
+  "FrameIndex", "TimedTranscript", "AIModel", "CachedData",
+];
+
+function workflowGatewayDirection(node: ContentFlowNode | undefined): "input" | "output" | null {
+  const family = node ? nodeFamilyOf(node) : "";
+  if (family === WORKFLOW_INPUT_GATEWAY_FAMILY) return "input";
+  if (family === WORKFLOW_OUTPUT_GATEWAY_FAMILY) return "output";
+  return null;
+}
+
+function isWorkflowGatewayNode(node: ContentFlowNode | undefined): boolean {
+  return workflowGatewayDirection(node) !== null;
+}
+
+function createWorkflowPortId() {
+  const suffix = globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `port-${suffix}`;
+}
+
+function normalizeWorkflowGatewayPorts(value: unknown): WorkflowGatewayPort[] {
+  if (!Array.isArray(value)) return [];
+  const usedIds = new Set<string>();
+  return value.flatMap((item, index) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const raw = item as Record<string, unknown>;
+    const id = typeof raw.id === "string" && raw.id.trim() && !usedIds.has(raw.id.trim()) ? raw.id.trim() : createWorkflowPortId();
+    usedIds.add(id);
+    const name = typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : `Cổng ${index + 1}`;
+    const type = typeof raw.type === "string" && raw.type.trim() ? raw.type.trim() : "Dữ liệu";
+    const description = typeof raw.description === "string" && raw.description.trim() ? raw.description.trim() : undefined;
+    return [{ id, name, type, required: raw.required === true, ...(description ? { description } : {}) }];
+  });
+}
+
+function portsForWorkflowGateway(direction: "input" | "output", gatewayPorts: WorkflowGatewayPort[]): Pick<NodeDefinition, "inputs" | "outputs"> {
+  const ports = gatewayPorts.map((port) => ({
+    id: `workflow-port-${port.id}`,
+    label: port.name,
+    type: port.type,
+    connectSize: getPortConnectSize(port.type),
+    required: direction === "output" ? port.required : false,
+  }));
+  return direction === "input" ? { inputs: [], outputs: ports } : { inputs: ports, outputs: [] };
+}
+
+function workflowInterfaceFromNodes(nodes: ContentFlowNode[]): WorkflowInterfaceShape {
+  const inputNode = nodes.find((node) => workflowGatewayDirection(node) === "input");
+  const outputNode = nodes.find((node) => workflowGatewayDirection(node) === "output");
+  return {
+    version: 1,
+    inputs: normalizeWorkflowGatewayPorts(inputNode?.data.workflowPorts),
+    outputs: normalizeWorkflowGatewayPorts(outputNode?.data.workflowPorts),
+  };
+}
 
 type WorkflowOutlinerDrag = { kind: "node" | "group"; id: string };
 type OutlinerSelectionGesture = { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean };
@@ -1494,6 +1571,35 @@ const NODE_DEFINITIONS: NodeDefinition[] = ensureUniqueIconsByCategory(NODE_SPEC
   };
 }));
 
+// Hai gateway này không thuộc catalog tác vụ thông thường: chúng chỉ mô tả hợp
+// đồng công khai của workflow để node Gọi workflow có thể dùng an toàn.
+const WORKFLOW_INTERFACE_NODE_DEFINITIONS: NodeDefinition[] = [
+  {
+    kind: "workflow-input-gateway",
+    label: WORKFLOW_INPUT_GATEWAY_FAMILY,
+    family: WORKFLOW_INPUT_GATEWAY_FAMILY,
+    icon: "⤒",
+    category: "Điều khiển workflow",
+    description: "Khai báo dữ liệu workflow nhận từ node Gọi workflow. Mỗi cổng tại đây sẽ là một cổng vào trên node gọi.",
+    inputs: [],
+    outputs: [],
+    configFields: [],
+    defaults: {},
+  },
+  {
+    kind: "workflow-output-gateway",
+    label: WORKFLOW_OUTPUT_GATEWAY_FAMILY,
+    family: WORKFLOW_OUTPUT_GATEWAY_FAMILY,
+    icon: "⇧",
+    category: "Điều khiển workflow",
+    description: "Khai báo kết quả workflow trả về node Gọi workflow. Nối dữ liệu cần trả vào các cổng tại đây.",
+    inputs: [],
+    outputs: [],
+    configFields: [],
+    defaults: {},
+  },
+];
+
 const primitiveDefinitionByLabel = new Map(NODE_SPECS.map((spec, index) => [spec.name, NODE_DEFINITIONS[index]]));
 
 function uniquePorts(ports: Port[], prefix: "input" | "output"): Port[] {
@@ -1694,9 +1800,9 @@ const BASIC_NODE_DEFINITIONS: NodeDefinition[] = ensureUniqueIconsByCategory(BAS
 const HIDDEN_LEGACY_ADVANCED_FAMILIES = new Set(["Trích xuất transcript video"]);
 const NODE_LIBRARY: Record<LibraryMode, readonly NodeDefinition[]> = {
   basic: BASIC_NODE_DEFINITIONS,
-  advanced: NODE_DEFINITIONS.filter((definition) => !HIDDEN_LEGACY_ADVANCED_FAMILIES.has(definition.family)),
+  advanced: [...WORKFLOW_INTERFACE_NODE_DEFINITIONS, ...NODE_DEFINITIONS.filter((definition) => !HIDDEN_LEGACY_ADVANCED_FAMILIES.has(definition.family))],
 };
-const ALL_NODE_DEFINITIONS = [...BASIC_NODE_DEFINITIONS, ...NODE_DEFINITIONS];
+const ALL_NODE_DEFINITIONS = [...BASIC_NODE_DEFINITIONS, ...WORKFLOW_INTERFACE_NODE_DEFINITIONS, ...NODE_DEFINITIONS];
 const definitionMap = new Map(ALL_NODE_DEFINITIONS.map((definition) => [definition.kind, definition]));
 const LEGACY_ADVANCED_KIND_MAP: Record<string, string> = (() => {
   const legacy = NODE_DEFINITIONS.find((definition) => definition.family === "Trích xuất transcript video");
@@ -1805,6 +1911,9 @@ function refreshNodeAppearance(node: ContentFlowNode): ContentFlowNode {
       : {}),
   };
   const selectedOperation = String(migratedConfig.basicOperation ?? NO_BASIC_OPERATION);
+  const gatewayDirection = workflowGatewayDirection(normalizedNode);
+  const workflowPorts = gatewayDirection ? normalizeWorkflowGatewayPorts(normalizedNode.data.workflowPorts) : undefined;
+  const gatewayActivePorts = gatewayDirection && workflowPorts ? portsForWorkflowGateway(gatewayDirection, workflowPorts) : undefined;
   const activePorts = portsForBasicConfiguration(definition, migratedConfig, selectedOperation);
   const migratedLegacyTranscript = Boolean(LEGACY_ADVANCED_KIND_MAP[normalizedNode.data.kind]);
   const migratedLabel = /^Trích xuất transcript video(?:\s+\d+)?$/.test(normalizedNode.data.label)
@@ -1822,7 +1931,7 @@ function refreshNodeAppearance(node: ContentFlowNode): ContentFlowNode {
        label: migratedLegacyTranscript ? migratedLabel : NODE_NAME_OVERRIDES[normalizedNode.data.label] ? definition.label : normalizedNode.data.label,
       icon: definition.icon,
       category: definition.category,
-      inputs: activePorts.inputs,
+       inputs: gatewayActivePorts?.inputs ?? activePorts.inputs,
        outputs: isFileStorageNode(normalizedNode)
          ? storageOutputsForType(
            activePorts.outputs,
@@ -1830,7 +1939,7 @@ function refreshNodeAppearance(node: ContentFlowNode): ContentFlowNode {
              ? "Dữ liệu"
              : String(migratedConfig.storedDataType ?? "StoredFile"),
          )
-         : activePorts.outputs,
+          : gatewayActivePorts?.outputs ?? activePorts.outputs,
       configFields: definition.basicMode === "choice"
         ? choiceFields(definition, selectedOperation)
         : definition.configFields,
@@ -1839,6 +1948,7 @@ function refreshNodeAppearance(node: ContentFlowNode): ContentFlowNode {
       basicMode: definition.basicMode,
       basicNodeLabels: definition.basicNodeLabels,
       basicSteps: definition.basicSteps,
+       ...(workflowPorts ? { workflowPorts } : {}),
       paused: normalizedNode.data.paused ?? false,
       beacon: normalizedNode.data.beacon ?? "uncheck",
     },
@@ -1851,6 +1961,9 @@ function makeNode(kind: string, id: string, position: { x: number; y: number }, 
     ? normalizeBasicOperation(definition, definition.defaults.basicOperation)
     : "";
   const activePorts = portsForBasicConfiguration(definition, definition.defaults, operation);
+  const gatewayDirection = definition.family === WORKFLOW_INPUT_GATEWAY_FAMILY ? "input" : definition.family === WORKFLOW_OUTPUT_GATEWAY_FAMILY ? "output" : null;
+  const gatewayPorts: WorkflowGatewayPort[] = [];
+  const gatewayActivePorts = gatewayDirection ? portsForWorkflowGateway(gatewayDirection, gatewayPorts) : undefined;
   return {
     id,
     type: "contentNode",
@@ -1859,13 +1972,14 @@ function makeNode(kind: string, id: string, position: { x: number; y: number }, 
       ...definition,
       family: definition.family,
       label: nextNodeName(definition.family, currentNodes),
-      inputs: activePorts.inputs,
-      outputs: activePorts.outputs,
+       inputs: gatewayActivePorts?.inputs ?? activePorts.inputs,
+       outputs: gatewayActivePorts?.outputs ?? activePorts.outputs,
       configFields: definition.basicMode === "choice" ? choiceFields(definition, operation) : definition.configFields,
       config: { ...definition.defaults },
       status: "idle",
       paused: false,
       beacon: "uncheck",
+       ...(gatewayDirection ? { workflowPorts: gatewayPorts } : {}),
     },
   };
 }
@@ -2726,6 +2840,13 @@ function WorkflowApp() {
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingGroupName, setEditingGroupName] = useState("");
   const [outlinerHeight, setOutlinerHeight] = useState(230);
+
+  // Cổng vào/Cổng ra là nguồn chân thực của interface. Nhờ đồng bộ này,
+  // đổi cổng được ghi vào .tess cùng với canvas thay vì thành một cấu hình rời.
+  useEffect(() => {
+    const nextInterface = workflowInterfaceFromNodes(nodes);
+    setWorkflowInterface((current) => JSON.stringify(current) === JSON.stringify(nextInterface) ? current : nextInterface);
+  }, [nodes]);
   const [outlinerDropTarget, setOutlinerDropTarget] = useState<string | null>(null);
   const [outlinerMarquee, setOutlinerMarquee] = useState<OutlinerMarquee | null>(null);
   const [search, setSearch] = useState("");
@@ -3238,7 +3359,7 @@ function WorkflowApp() {
 
   const saveWorkflow = useCallback(async (saveAs = false) => {
     const name = workflowName.trim() || "New workflow";
-    const workflow = prepareWorkflowForSave({ version: 6, name, workflowId, workflowInterface, nodes, edges, groups: workflowGroups });
+    const workflow = prepareWorkflowForSave({ version: 6, name, workflowId, workflowInterface: workflowInterfaceFromNodes(nodes), nodes, edges, groups: workflowGroups });
     setWorkflowName(name);
     if (!window.contentFlowDesktop) {
       setNotice("Tính năng Lưu tệp chỉ dùng được trong ứng dụng Content Flow Desktop.");
@@ -3569,6 +3690,16 @@ function WorkflowApp() {
 
   const addNodeToCanvas = useCallback(
     (kind: string, position?: { x: number; y: number }) => {
+      const definition = definitionMap.get(kind);
+      const gatewayFamily = definition?.family === WORKFLOW_INPUT_GATEWAY_FAMILY || definition?.family === WORKFLOW_OUTPUT_GATEWAY_FAMILY
+        ? definition.family
+        : null;
+      const existingGateway = gatewayFamily ? nodes.find((node) => nodeFamilyOf(node) === gatewayFamily) : undefined;
+      if (existingGateway) {
+        setSelectedId(existingGateway.id);
+        setNotice(`Workflow chỉ có một node ${gatewayFamily}. Đã chọn node hiện có để bạn chỉnh các cổng.`);
+        return;
+      }
       rememberCanvasChange();
       const id = claimNextNodeId(kind);
       const fallback = screenToFlowPosition({
@@ -3580,7 +3711,7 @@ function WorkflowApp() {
       setSelectedId(id);
       setNotice("Đã thêm node mới. Hãy nối các cổng cùng loại dữ liệu.");
     },
-    [claimNextNodeId, refreshLocalProcessors, rememberCanvasChange, screenToFlowPosition, setNodes],
+    [claimNextNodeId, nodes, refreshLocalProcessors, rememberCanvasChange, screenToFlowPosition, setNodes],
   );
 
   const copyCanvasSelection = useCallback(() => {
@@ -3805,6 +3936,32 @@ function WorkflowApp() {
     },
     [addNodeToCanvas, screenToFlowPosition],
   );
+
+  const updateWorkflowGatewayPorts = (change: (ports: WorkflowGatewayPort[]) => WorkflowGatewayPort[]) => {
+    if (!selectedNode || !selectedId) return;
+    const direction = workflowGatewayDirection(selectedNode);
+    if (!direction) return;
+    const nextPorts = normalizeWorkflowGatewayPorts(change(normalizeWorkflowGatewayPorts(selectedNode.data.workflowPorts)));
+    const nextCanvasPorts = portsForWorkflowGateway(direction, nextPorts);
+    const allowedHandleIds = new Set((direction === "input" ? nextCanvasPorts.outputs : nextCanvasPorts.inputs).map((port) => port.id));
+    rememberCanvasChange();
+    setEdges((current) => current.filter((edge) => (
+      (edge.source !== selectedId || Boolean(edge.sourceHandle && allowedHandleIds.has(edge.sourceHandle)))
+      && (edge.target !== selectedId || Boolean(edge.targetHandle && allowedHandleIds.has(edge.targetHandle)))
+    )));
+    setNodes((current) => current.map((node) => node.id === selectedId ? {
+      ...node,
+      data: {
+        ...node.data,
+        workflowPorts: nextPorts,
+        inputs: nextCanvasPorts.inputs,
+        outputs: nextCanvasPorts.outputs,
+        status: "idle",
+        beacon: "uncheck",
+        output: undefined,
+      },
+    } : node));
+  };
 
   const updateConfig = (key: string, value: FieldValue, validationError?: string | null) => {
     if (!selectedId) return;
@@ -4407,7 +4564,7 @@ function WorkflowApp() {
     const name = workflowName.trim() || "New workflow";
     const safeFileName = name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").replace(/[. ]+$/g, "").trim() || "New workflow";
     setWorkflowName(name);
-    const workflow = prepareWorkflowForSave({ version: 6, name, workflowId, workflowInterface, nodes, edges, groups: workflowGroups });
+    const workflow = prepareWorkflowForSave({ version: 6, name, workflowId, workflowInterface: workflowInterfaceFromNodes(nodes), nodes, edges, groups: workflowGroups });
     setWorkflowId(workflow.workflowId);
     setWorkflowInterface(workflow.workflowInterface);
     const blob = new Blob([serializeTessWorkflow(workflow)], { type: "application/x-tesseract-workflow" });
@@ -4978,6 +5135,71 @@ function WorkflowApp() {
                     onChange={(event) => updateNodeIdentity("label", event.target.value)}
                   />
                 </label>
+                {isWorkflowGatewayNode(selectedNode) && (() => {
+                  const direction = workflowGatewayDirection(selectedNode)!;
+                  const ports = normalizeWorkflowGatewayPorts(selectedNode.data.workflowPorts);
+                  const role = direction === "input" ? "đầu vào của workflow" : "đầu ra của workflow";
+                  return (
+                    <section className="workflow-gateway-editor" aria-label={`Cổng ${role}`}>
+                      <div>
+                        <strong>{direction === "input" ? "Cổng workflow nhận" : "Cổng workflow trả"}</strong>
+                        <small>{direction === "input" ? "Các cổng này sẽ hiện ở bên vào của node Gọi workflow." : "Nối dữ liệu cần trả vào đây; chúng sẽ hiện ở bên ra của node Gọi workflow."}</small>
+                      </div>
+                      <datalist id="workflow-port-type-suggestions">
+                        {WORKFLOW_PORT_TYPE_SUGGESTIONS.map((type) => <option key={type} value={type} />)}
+                      </datalist>
+                      {ports.length === 0 && <p className="gateway-empty-state">Chưa có cổng nào. Thêm cổng để công bố interface của workflow.</p>}
+                      {ports.map((port, index) => (
+                        <div className="workflow-gateway-port" key={port.id}>
+                          <input
+                            aria-label={`Tên cổng ${index + 1}`}
+                            value={port.name}
+                            placeholder="Tên cổng"
+                            onChange={(event) => updateWorkflowGatewayPorts((current) => current.map((item) => item.id === port.id ? { ...item, name: event.target.value } : item))}
+                          />
+                          <input
+                            aria-label={`Kiểu dữ liệu cổng ${index + 1}`}
+                            list="workflow-port-type-suggestions"
+                            value={port.type}
+                            placeholder="Kiểu dữ liệu"
+                            onChange={(event) => updateWorkflowGatewayPorts((current) => current.map((item) => item.id === port.id ? { ...item, type: event.target.value } : item))}
+                          />
+                          <label className="gateway-required">
+                            <input
+                              type="checkbox"
+                              checked={port.required}
+                              onChange={(event) => updateWorkflowGatewayPorts((current) => current.map((item) => item.id === port.id ? { ...item, required: event.target.checked } : item))}
+                            />
+                            Bắt buộc
+                          </label>
+                          <div className="gateway-port-actions">
+                            <button type="button" title="Đưa cổng lên" disabled={index === 0} onClick={() => updateWorkflowGatewayPorts((current) => {
+                              const next = [...current];
+                              [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                              return next;
+                            })}>↑</button>
+                            <button type="button" title="Đưa cổng xuống" disabled={index === ports.length - 1} onClick={() => updateWorkflowGatewayPorts((current) => {
+                              const next = [...current];
+                              [next[index + 1], next[index]] = [next[index], next[index + 1]];
+                              return next;
+                            })}>↓</button>
+                            <button type="button" title="Xóa cổng" onClick={() => updateWorkflowGatewayPorts((current) => current.filter((item) => item.id !== port.id))}>Xóa</button>
+                          </div>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        className="add-workflow-gateway-port"
+                        onClick={() => updateWorkflowGatewayPorts((current) => [...current, {
+                          id: createWorkflowPortId(),
+                          name: `Cổng ${current.length + 1}`,
+                          type: "Dữ liệu",
+                          required: false,
+                        }])}
+                      >+ Thêm cổng</button>
+                    </section>
+                  );
+                })()}
                 {nodeFamilyOf(selectedNode) !== "Xem dữ liệu trên canvas" && selectedNode.data.configFields.filter((field) => !field.showWhen || String(selectedNode.data.config[field.showWhen.key] ?? "") === field.showWhen.value).map((field, index, visibleFields) => (
                   <div className="config-field-block" key={field.key}>
                     {index > 0 && field.configGroup && field.configGroup !== visibleFields[index - 1]?.configGroup && <div className="config-section-divider" aria-hidden="true" />}

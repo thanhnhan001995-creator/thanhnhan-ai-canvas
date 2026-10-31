@@ -1701,6 +1701,14 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm test` — build thành công, **45/45** bài kiểm tra đạt.
 
+## 2026-10-31 +07:00 — REC-02: Node Cổng vào / Cổng ra
+
+- Thêm hai node Chi tiết trong nhóm Điều khiển workflow: `Cổng vào` công bố dữ liệu workflow nhận từ caller; `Cổng ra` nhận dữ liệu workflow trả lại caller. Mỗi workflow chỉ có một node mỗi loại để interface không mơ hồ.
+- Properties cho phép thêm, xóa, đổi tên, đổi kiểu dữ liệu, đặt bắt buộc và sắp thứ tự cổng. Mỗi cổng có ID ổn định, nên đổi tên/sắp thứ tự không làm đứt dây đã nối hoặc interface đã lưu.
+- Interface `.tess` nay được tạo trực tiếp từ hai node gateway mỗi khi lưu/xuất. Gateway có executor tối thiểu để phát lại dữ liệu caller theo ID cổng; chưa thực hiện việc đọc/chạy workflow con (thuộc REC-03).
+
+**Kiểm tra:** `npm test` — build thành công, **46/46** bài kiểm tra đạt.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 
