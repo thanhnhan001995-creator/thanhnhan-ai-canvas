@@ -1736,6 +1736,14 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm test` — build thành công, **51/51** bài kiểm tra đạt.
 
+## 2026-10-31 +07:00 — REC-06: Kiểm thử và nghiệm thu workflow gọi lại
+
+- Mở rộng regression bằng ca workflow có vòng trực tiếp, vòng ba workflow, đồ thị hợp lệ, đích `.tess` không đọc được và đường gọi qua các tab có `workflowId` ổn định. Tổng suite hiện có 53 ca.
+- Thêm checklist nghiệm thu thủ công tại `support/checklists/workflow-call-acceptance.md`: truyền dữ liệu qua Cổng vào/Cổng ra, interface thay đổi, vòng trước khi chạy, vòng phát sinh sau kiểm tra, file/tab không tồn tại, nhiều tab và hai giới hạn runtime.
+- Checklist nêu rõ đây là bản phát triển: không đóng gói hoặc cập nhật bản cài cho đến khi người dùng duyệt phát hành chính thức.
+
+**Kiểm tra:** `npm test` — build thành công, **53/53** bài kiểm tra đạt.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 

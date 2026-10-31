@@ -44,3 +44,28 @@ test("allows a non-recursive call graph", async () => {
 
   assert.deepEqual(cycles, []);
 });
+
+test("keeps an unreadable called workflow visible to the caller", async () => {
+  const a = workflow("A", [{ id: "call-missing", target: "missing-file" }]);
+  await assert.rejects(
+    findWorkflowReferenceCycles(a, {
+      getKey: (document) => document.id,
+      getLabel: (document) => document.label,
+      getCalls: (document) => document.calls,
+      resolveTarget: async (call) => {
+        throw new Error(`Không thể đọc workflow .tess: ${call.target}`);
+      },
+    }),
+    /Không thể đọc workflow \.tess: missing-file/,
+  );
+});
+
+test("uses stable workflow IDs when calls cross open workflow tabs", async () => {
+  const a = workflow("workflow-stable-a", [{ id: "tab-call-b", target: "workflow-stable-b" }]);
+  const b = workflow("workflow-stable-b", [{ id: "tab-call-a", target: "workflow-stable-a" }]);
+  const cycles = await cyclesFrom(a, new Map([[a.id, a], [b.id, b]]));
+
+  assert.equal(cycles.length, 1);
+  assert.deepEqual(cycles[0].chain, ["Workflow workflow-stable-a", "Workflow workflow-stable-b", "Workflow workflow-stable-a"]);
+});
+
