@@ -33,6 +33,7 @@ import { getPortConnectSize, portContractLabel, portTypesCompatible, SELF_CONFIG
 import { beginLocalMediaWorkflowRun, controlLocalMediaWorkflow, endLocalMediaWorkflowRun, executeCalledWorkflow, executeWorkflowNode, parseDurationInput, resetAiTokenUsage, type ExecutionProgress, type RuntimeFileStore, type WorkflowDocumentLike } from "./research-client";
 import { hasNodeExecutor } from "./node-execution.ts";
 import { currentOpenAiModel, getAiModelCapabilities, replacementForRetiredOpenAiModel, type CapabilityState } from "./ai-model-capabilities";
+import { LOCAL_AI_REGISTRY_STORAGE_KEY, localAiModelIds, mergeScannedOllamaModel, normalizeLocalAiRegistry, removeLocalAiModel, type LocalAiModel, type ScannedOllamaModel } from "./local-ai-registry";
 import { nextNodeName, nodeFamilyOf } from "./node-identity";
 import { createWorkflowId, normalizeWorkflowInterface, parseWorkflowDocument, prepareWorkflowForSave, serializeTessWorkflow, workflowNameFromPath } from "../shared/tess-document.mjs";
 import { findWorkflowReferenceCycles } from "../shared/workflow-recursion.mjs";
@@ -61,6 +62,7 @@ type WorkflowCheckSummary = { message: string; beacon: "miss" | "ready" | "error
 type FieldValue = string | number | boolean;
 type StoredFileReference = { filePath: string; name: string; type: string; size: number; storedAt: string };
 type RecentWorkflow = { path: string; name: string; openedAt: number };
+type OllamaScan = { models: ScannedOllamaModel[]; scannedAt: string };
 
 const RECENT_WORKFLOWS_STORAGE_KEY = "content-flow-recent-workflows-v1";
 const RECENT_WORKFLOWS_LIMIT = 6;
@@ -78,6 +80,22 @@ function readRecentWorkflows(): RecentWorkflow[] {
   } catch {
     return [];
   }
+}
+
+function readLocalAiRegistry(): LocalAiModel[] {
+  try { return normalizeLocalAiRegistry(JSON.parse(localStorage.getItem(LOCAL_AI_REGISTRY_STORAGE_KEY) ?? "[]")); }
+  catch { return []; }
+}
+
+function localAiModelSize(size?: number): string {
+  if (!size) return "Dung lượng chưa rõ";
+  return `${(size / 1024 / 1024 / 1024).toFixed(size >= 10 * 1024 * 1024 * 1024 ? 0 : 1)} GB`;
+}
+
+function localAiModifiedAt(value?: string): string {
+  if (!value) return "Thời điểm cập nhật chưa rõ";
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf()) ? "Thời điểm cập nhật chưa rõ" : new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short" }).format(date);
 }
 
 type Port = {
@@ -310,7 +328,8 @@ function inspectWorkflow(nodes: ContentFlowNode[], edges: Edge[]): WorkflowInspe
   }
   const hasAiCall = nodes.some((node) => ["Gọi AI tạo văn bản", "Gọi AI trả JSON", "Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"].includes(nodeFamilyOf(node)));
   const hasKey = nodes.some((node) => String(node.data.config.apiKey ?? "").trim());
-  if (hasAiCall && !hasKey) {
+  const hasOllamaSetup = nodes.some((node) => ["Thiết lập AI", "Chọn nhà cung cấp AI"].includes(nodeFamilyOf(node)) && String(node.data.config.provider ?? "") === "Ollama");
+  if (hasAiCall && !hasKey && !hasOllamaSetup) {
     const firstAi = nodes.find((node) => ["Gọi AI tạo văn bản", "Gọi AI trả JSON", "Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"].includes(nodeFamilyOf(node)));
     if (firstAi) {
       issues.push({ nodeId: firstAi.id, beacon: "error", message: "Workflow chưa có API key. Nhập trực tiếp trong Thiết lập AI hoặc nối Cấu hình API key vào cổng APIKey." });
@@ -2808,7 +2827,19 @@ const FALLBACK_MODELS: Record<string, string[]> = {
   "Khác": [],
 };
 
-function ProviderModelField({ config, providerConfig, onChange }: { config: Record<string, FieldValue>; providerConfig?: Record<string, FieldValue> | null; onChange: (key: string, value: FieldValue, error?: string | null) => void }) {
+function ProviderModelField({
+  config,
+  providerConfig,
+  localAiModels,
+  onManageLocalAi,
+  onChange,
+}: {
+  config: Record<string, FieldValue>;
+  providerConfig?: Record<string, FieldValue> | null;
+  localAiModels: LocalAiModel[];
+  onManageLocalAi: () => void;
+  onChange: (key: string, value: FieldValue, error?: string | null) => void;
+}) {
   const provider = String(providerConfig?.provider ?? "");
   const [models, setModels] = useState<string[]>(() => {
     try { return typeof window === "undefined" ? [] : JSON.parse(localStorage.getItem(`content-flow-models:${provider}`) ?? "[]") as string[]; } catch { return []; }
@@ -2816,14 +2847,17 @@ function ProviderModelField({ config, providerConfig, onChange }: { config: Reco
   useEffect(() => {
     try { setModels(JSON.parse(localStorage.getItem(`content-flow-models:${provider}`) ?? "[]") as string[]); } catch { setModels([]); }
   }, [provider]);
-  const activeModels = useMemo(() => [...new Set((models.length ? models : (FALLBACK_MODELS[provider] ?? []))
+  const activeModels = useMemo(() => [...new Set((provider === "Ollama"
+    ? localAiModelIds(localAiModels)
+    : (models.length ? models : (FALLBACK_MODELS[provider] ?? [])))
     .map((model) => provider === "OpenAI" ? currentOpenAiModel(model) : model))]
-    .sort((left, right) => left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" })), [models, provider]);
+    .sort((left, right) => left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" })), [localAiModels, models, provider]);
   const selected = String(config.model ?? "");
   const modelForCapabilities = selected === "Khác — nhập ID model" ? String(config.customModel ?? "") : selected;
   const capabilities = getAiModelCapabilities(provider, modelForCapabilities);
   const compatible = !selected || selected === "Khác — nhập ID model" || activeModels.includes(selected);
   const refresh = async () => {
+    if (provider === "Ollama") { onManageLocalAi(); return; }
     if (provider === "Khác") { onChange("modelCatalogStatus", "Nhà cung cấp khác: nhập ID model chính xác ở bên dưới; không thể tự động làm mới danh sách.", null); return; }
     const response = await fetch("/api/research", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "list-models", provider, localEndpoint: providerConfig?.localEndpoint, apiKey: providerConfig?.apiKey }) });
     const body = await response.json() as { models?: string[]; error?: string; updatedAt?: string };
@@ -2835,8 +2869,9 @@ function ProviderModelField({ config, providerConfig, onChange }: { config: Reco
   return <div className="provider-model-field">
     <div className="selected-provider">Nhà cung cấp đã chọn: <strong>{provider}</strong></div>
     {providerConfig?.apiKeyFromPort === true && <small className="field-help">Đã kết nối key API qua cổng APIKey.</small>}
-    <div className="model-row"><FilterableSelect value={selected} options={[...activeModels, "Khác — nhập ID model"]} placeholder="Chọn model…" sort onChange={(value) => onChange("model", value, null)} /><button type="button" onClick={() => { void refresh(); }} disabled={provider === "Khác"}>Cập nhật model</button></div>
-    {selected === "Khác — nhập ID model" && <input value={String(config.customModel ?? "")} placeholder="Nhập chính xác ID model" onChange={(event) => onChange("customModel", event.target.value)} />}
+    <div className="model-row"><FilterableSelect value={selected} options={provider === "Ollama" ? activeModels : [...activeModels, "Khác — nhập ID model"]} placeholder={provider === "Ollama" && !activeModels.length ? "Chưa có model Ollama trong danh mục" : "Chọn model…"} sort onChange={(value) => onChange("model", value, null)} /><button type="button" onClick={() => { void refresh(); }} disabled={provider === "Khác"}>{provider === "Ollama" ? "Quản lý AI" : "Cập nhật model"}</button></div>
+    {provider === "Ollama" && <small className="field-help">Ollama không dùng API key. Mở Quản lý AI để quét và thêm model local vào danh mục.</small>}
+    {selected === "Khác — nhập ID model" && provider !== "Ollama" && <input value={String(config.customModel ?? "")} placeholder="Nhập chính xác ID model" onChange={(event) => onChange("customModel", event.target.value)} />}
     <section className="model-capabilities" aria-live="polite" aria-label="Khả năng model đã chọn">
       <strong>Khả năng trong Content Flow</strong>
       {([
@@ -2988,6 +3023,12 @@ function WorkflowApp() {
   const [localProcessors, setLocalProcessors] = useState<LocalProcessor[]>([]);
   const [localProcessorError, setLocalProcessorError] = useState<string | null>(null);
   const [localProcessorBusy, setLocalProcessorBusy] = useState<string | null>(null);
+  const [localAiManagerOpen, setLocalAiManagerOpen] = useState(false);
+  const [localAiModels, setLocalAiModels] = useState<LocalAiModel[]>(() => readLocalAiRegistry());
+  const [scannedOllamaModels, setScannedOllamaModels] = useState<ScannedOllamaModel[]>([]);
+  const [localAiScannedAt, setLocalAiScannedAt] = useState<string | null>(null);
+  const [localAiError, setLocalAiError] = useState<string | null>(null);
+  const [localAiBusy, setLocalAiBusy] = useState(false);
   const [leftPanelWidth, setLeftPanelWidth] = useState(242);
   const [rightPanelWidth, setRightPanelWidth] = useState(340);
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
@@ -3868,6 +3909,43 @@ function WorkflowApp() {
       setLocalProcessorBusy(null);
     }
   }, []);
+
+  const persistLocalAiModels = useCallback((next: LocalAiModel[]) => {
+    const normalized = normalizeLocalAiRegistry(next);
+    setLocalAiModels(normalized);
+    localStorage.setItem(LOCAL_AI_REGISTRY_STORAGE_KEY, JSON.stringify(normalized));
+  }, []);
+
+  const scanOllamaModels = useCallback(async () => {
+    setLocalAiBusy(true);
+    setLocalAiError(null);
+    try {
+      const response = await fetch("/api/local-ai", { cache: "no-store" });
+      const payload = await response.json() as { models?: ScannedOllamaModel[]; scannedAt?: string; error?: string };
+      if (!response.ok || !Array.isArray(payload.models)) throw new Error(payload.error || "Không thể quét model Ollama.");
+      setScannedOllamaModels(payload.models);
+      setLocalAiScannedAt(typeof payload.scannedAt === "string" ? payload.scannedAt : new Date().toISOString());
+    } catch (error) {
+      setLocalAiError(error instanceof Error ? error.message : "Không thể quét model Ollama.");
+    } finally {
+      setLocalAiBusy(false);
+    }
+  }, []);
+
+  const showLocalAiManager = useCallback(() => {
+    setOpenMenu(null);
+    setLocalAiManagerOpen(true);
+    setLocalAiError(null);
+    void scanOllamaModels();
+  }, [scanOllamaModels]);
+
+  const addLocalAiModel = useCallback((model: ScannedOllamaModel) => {
+    persistLocalAiModels(mergeScannedOllamaModel(localAiModels, model));
+  }, [localAiModels, persistLocalAiModels]);
+
+  const removeRegisteredLocalAiModel = useCallback((modelId: string) => {
+    persistLocalAiModels(removeLocalAiModel(localAiModels, modelId));
+  }, [localAiModels, persistLocalAiModels]);
 
   const browseWorkflow = useCallback(async () => {
     const opened = await openWorkflow();
@@ -5342,6 +5420,7 @@ function WorkflowApp() {
                 <button disabled={canvasClosed} onClick={() => { setOpenMenu(null); toggleSelectedNodePause(); }}><span>Tạm ngưng/bật node đã chọn</span><kbd>Ctrl+P</kbd></button>
                 <button disabled={canvasClosed} onClick={() => { setOpenMenu(null); void saveWorkflow(); }}><span>Lưu trước khi chạy</span></button>
                 <i />
+                <button onClick={showLocalAiManager}><span>Quản lý AI</span></button>
                 <button onClick={showLocalProcessors}><span>Điều chỉnh xử lý cục bộ</span></button>
               </div>}
             </div>
@@ -5912,7 +5991,7 @@ function WorkflowApp() {
                     <div className={`config-field type-${field.type}`}>
                     <span>{field.label}{field.required && <b className="required-mark" title="Bắt buộc">*</b>}</span>
                     {field.type === "model-catalog" ? (
-                      <ProviderModelField config={selectedNode.data.config} providerConfig={modelProviderConfig} onChange={updateConfig} />
+                      <ProviderModelField config={selectedNode.data.config} providerConfig={modelProviderConfig} localAiModels={localAiModels} onManageLocalAi={showLocalAiManager} onChange={updateConfig} />
                     ) : field.type === "date-time-pair" ? (
                       <DateTimePairField
                         time={String(selectedNode.data.config.time ?? "00:00")}
@@ -6243,6 +6322,52 @@ function WorkflowApp() {
             <div className="recent-workflows-actions">
               <button type="button" className="button ghost" disabled={Boolean(localProcessorBusy)} onClick={() => setLocalProcessorsOpen(false)}>Đóng</button>
               <button type="button" className="button primary" disabled={Boolean(localProcessorBusy)} onClick={() => { void refreshLocalProcessors(); }}>Làm mới trạng thái</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {localAiManagerOpen && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="local-ai-manager-title">
+          <div className="local-processors-modal local-ai-manager-modal">
+            <div className="recent-workflows-head">
+              <div>
+                <span className="eyebrow">WORKFLOW</span>
+                <h2 id="local-ai-manager-title">Quản lý AI</h2>
+              </div>
+              <button type="button" className="recent-workflows-close" onClick={() => setLocalAiManagerOpen(false)} aria-label="Đóng">×</button>
+            </div>
+            <p>Quét model đã cài trong Ollama rồi chủ động thêm vào danh mục Tesseract. Gỡ chỉ xóa khỏi danh mục app, không xóa model khỏi máy.</p>
+            {localAiError && <div className="recent-workflows-error" role="alert">{localAiError}</div>}
+            <div className="local-processors-list local-ai-model-list" aria-label="Model Ollama local">
+              {scannedOllamaModels.length ? scannedOllamaModels.map((model) => {
+                const registered = localAiModels.some((item) => item.id === model.id);
+                return <article className={`local-processor ${registered ? "installed" : "missing"}`} key={model.id}>
+                  <div className="local-processor-status" aria-label={registered ? "Đã thêm vào Tesseract" : "Chưa thêm vào Tesseract"}>{registered ? "●" : "○"}</div>
+                  <div className="local-processor-copy">
+                    <strong>{model.id}</strong>
+                    <p>Ollama local · {localAiModelSize(model.size)}</p>
+                    <small>Cập nhật trong Ollama: {localAiModifiedAt(model.modifiedAt)}</small>
+                  </div>
+                  <div className="local-processor-actions">
+                    {registered
+                      ? <button type="button" className="danger" disabled={localAiBusy} onClick={() => removeRegisteredLocalAiModel(model.id)}>Gỡ khỏi Tesseract</button>
+                      : <button type="button" className="primary" disabled={localAiBusy} onClick={() => addLocalAiModel(model)}>Thêm vào Tesseract</button>}
+                  </div>
+                </article>;
+              }) : !localAiBusy && !localAiError && <div className="recent-workflows-empty">Chưa quét được model nào. Bấm Quét lại để kiểm tra Ollama.</div>}
+              {!scannedOllamaModels.length && localAiBusy && <div className="recent-workflows-empty">Đang quét model Ollama trên máy…</div>}
+              {localAiModels.filter((registered) => !scannedOllamaModels.some((model) => model.id === registered.id)).map((model) => (
+                <article className="local-processor missing" key={`missing-${model.id}`}>
+                  <div className="local-processor-status" aria-label="Không tìm thấy khi quét">○</div>
+                  <div className="local-processor-copy"><strong>{model.id}</strong><p>Đã có trong Tesseract nhưng không tìm thấy khi quét Ollama gần nhất.</p><small>Không thể dùng cho tới khi model xuất hiện lại hoặc được gỡ khỏi danh mục.</small></div>
+                  <div className="local-processor-actions"><button type="button" className="danger" disabled={localAiBusy} onClick={() => removeRegisteredLocalAiModel(model.id)}>Gỡ khỏi Tesseract</button></div>
+                </article>
+              ))}
+            </div>
+            <div className="local-processors-note">{localAiScannedAt ? `Quét gần nhất: ${localAiModifiedAt(localAiScannedAt)}.` : "Chưa có lượt quét thành công trong phiên này."} Model đã thêm sẽ xuất hiện trong node Thiết lập AI khi chọn nhà cung cấp Ollama.</div>
+            <div className="recent-workflows-actions">
+              <button type="button" className="button ghost" disabled={localAiBusy} onClick={() => setLocalAiManagerOpen(false)}>Đóng</button>
+              <button type="button" className="button primary" disabled={localAiBusy} onClick={() => { void scanOllamaModels(); }}>{localAiBusy ? "Đang quét…" : "Quét lại"}</button>
             </div>
           </div>
         </div>

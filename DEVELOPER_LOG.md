@@ -1774,6 +1774,16 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 - **Kết quả mong đợi:** chọn `.tess` trong node Gọi workflow sẽ đọc file, đồng bộ các cổng Cổng vào/Cổng ra và không còn báo nhầm là ngoài Desktop.
 - **Kiểm tra:** `npm test` — build thành công, **56/56** bài kiểm tra đạt.
 
+## 2026-10-31 +07:00 — Quản lý AI local Ollama
+
+- Thêm **Workflow → Quản lý AI**: quét `Ollama` tại máy cục bộ, hiển thị tên model, dung lượng, thời điểm cập nhật, rồi cho người dùng chủ động thêm/gỡ khỏi danh mục Tesseract.
+- Danh mục model được lưu theo máy trong profile app, không ghi vào workflow `.tess`. Nút **Gỡ khỏi Tesseract** chỉ gỡ lựa chọn của app, không gọi `ollama rm` và không xóa model vật lý.
+- Node **Thiết lập AI** khi chọn Ollama nay chỉ hiển thị model đã thêm; Ollama không yêu cầu API key. Node **Xử lý văn bản bằng AI** đã gọi được Ollama cho văn bản/JSON.
+- Bổ sung endpoint quét cục bộ, thông báo lỗi kết nối rõ ràng, kiểm thử registry và regression UI. Tắt `thinking` mặc định cho lượt gọi Ollama để các model Qwen trả output thực thay vì dùng hết giới hạn ngắn cho reasoning nội bộ.
+- Đã thử trên máy: quét được 6 model Ollama và gọi `qwen3:1.7b` qua API Tesseract thành công, trả `sẵn sàng` với 40 token vào, 5 token ra, không dùng API key.
+
+**Kiểm tra:** `npm test` — build thành công, **58/58** bài kiểm tra đạt.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 

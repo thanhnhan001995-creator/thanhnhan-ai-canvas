@@ -83,6 +83,19 @@ export function getAiModelCapabilities(provider?: string, model?: string): AiMod
   if (!selectedModel || selectedModel === "Khác — nhập ID model") {
     return { text: "unknown", image: "unknown", audioAnalysis: "unknown", reasoning: "unknown", message: "Chọn hoặc nhập ID model để xem khả năng tương thích." };
   }
+  if (selectedProvider === "Ollama") {
+    const text = /(?:embedding|embed|rerank)/i.test(selectedModel) ? "unsupported" : "supported";
+    const image = /(?:\bvl\b|vision|llava|moondream)/i.test(selectedModel) ? "unknown" : "unsupported";
+    return {
+      text,
+      image,
+      audioAnalysis: text,
+      reasoning: "unknown",
+      message: text === "unsupported"
+        ? "Đây có vẻ là model embedding/rerank, không phù hợp cho node tạo văn bản hoặc JSON."
+        : "Ollama dùng được cho node Xử lý văn bản bằng AI (văn bản/JSON) mà không cần API key. Tác vụ gửi media trực tiếp vẫn cần OpenAI ở phiên bản hiện tại.",
+    };
+  }
   if (selectedProvider !== "OpenAI") {
     return { text: "unknown", image: "unknown", audioAnalysis: "unknown", reasoning: "unknown", message: "Khả năng chưa xác minh tự động. Bộ thực thi trực tiếp hiện chỉ hỗ trợ OpenAI." };
   }

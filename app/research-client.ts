@@ -2488,6 +2488,7 @@ function executeAiConfigurationNode(node: WorkflowNodeLike, inputs: Record<strin
     provider: String(provider?.provider ?? config.provider ?? "OpenAI"),
     model: String(config.customModel || config.model || "Tự động (khuyến nghị)"),
     temperature: String(config.temperature ?? "Cân bằng (0.7)"),
+    customTemperature: Number(config.customTemperature ?? 0.7),
     maxOutputTokens: String(config.maxOutputTokens ?? "2.000 — tiêu chuẩn"),
     maxInputTokens: Number(provider?.maxInputTokens ?? provider?.maxWorkflowTokens ?? config.maxInputTokens ?? config.maxWorkflowTokens ?? 40_000),
     maxOutputWorkflowTokens: Number(provider?.maxOutputWorkflowTokens ?? config.maxOutputWorkflowTokens ?? 20_000),
@@ -2553,6 +2554,9 @@ function aiCallSettings(node: WorkflowNodeLike, inputs: Record<string, unknown>)
   const usesConnectedAiModelOnly = ["Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"].includes(node.data.label);
   const configuredModel = String(model.model ?? (usesConnectedAiModelOnly ? "" : config.model) ?? "").trim();
   const cacheKey = String(model.cacheKey ?? "").trim();
+  const temperatureLabel = String(model.temperature ?? config.temperature ?? "Cân bằng (0.7)");
+  const numericTemperature = Number(model.customTemperature ?? config.customTemperature);
+  const labelledTemperature = Number(temperatureLabel.match(/\(([0-9.]+)\)/)?.[1]);
   return {
     provider: String(model.provider ?? (usesConnectedAiModelOnly ? "" : config.provider) ?? "OpenAI"),
     model: configuredModel === "Tự động (khuyến nghị)" ? "" : configuredModel,
@@ -2560,6 +2564,7 @@ function aiCallSettings(node: WorkflowNodeLike, inputs: Record<string, unknown>)
     maxOutputTokens: Number(String(model.maxOutputTokens ?? config.maxOutputTokens ?? "").replace(/[^0-9]/g, "")) || 2000,
     maxInputTokens: Math.max(1_000, Math.min(40_000, Number(model.maxInputTokens ?? model.maxWorkflowTokens ?? config.maxInputTokens ?? config.maxWorkflowTokens ?? 40_000) || 40_000)),
     maxOutputWorkflowTokens: Math.max(500, Math.min(20_000, Number(model.maxOutputWorkflowTokens ?? config.maxOutputWorkflowTokens ?? 20_000) || 20_000)),
+    temperature: Math.max(0, Math.min(2, Number.isFinite(numericTemperature) && temperatureLabel === "Tùy chỉnh" ? numericTemperature : Number.isFinite(labelledTemperature) ? labelledTemperature : 0.7)),
     cacheKey,
   };
 }
@@ -2608,11 +2613,11 @@ async function executeAiRuntimeNode(node: WorkflowNodeLike, inputs: Record<strin
   const config = node.data.config ?? {};
   const settings = aiCallSettings(node, inputs);
   const usesConnectedAiModelOnly = ["Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"].includes(node.data.label);
-  if (usesConnectedAiModelOnly && (!settings.provider || !settings.model || !settings.apiKey)) {
-    throw new Error(`${node.data.label} cần nối cổng AIModel từ node Thiết lập AI có nhà cung cấp, model và API key hợp lệ.`);
+  if (usesConnectedAiModelOnly && (!settings.provider || !settings.model || (settings.provider !== "Ollama" && !settings.apiKey))) {
+    throw new Error(`${node.data.label} cần nối cổng AIModel từ node Thiết lập AI có nhà cung cấp, model${settings.provider === "Ollama" ? "" : " và API key"} hợp lệ.`);
   }
-  if (settings.provider !== "OpenAI") throw new Error(`Bộ thực thi trực tiếp hiện hỗ trợ OpenAI; node đang chọn ${settings.provider}.`);
-  if (!settings.apiKey) throw new Error("Chưa nhận được API key từ Thiết lập AI. Hãy nhập key hoặc nối cổng APIKey.");
+  if (!["OpenAI", "Ollama"].includes(settings.provider)) throw new Error(`Bộ thực thi trực tiếp hiện hỗ trợ OpenAI và Ollama; node đang chọn ${settings.provider}.`);
+  if (settings.provider !== "Ollama" && !settings.apiKey) throw new Error("Chưa nhận được API key từ Thiết lập AI. Hãy nhập key hoặc nối cổng APIKey.");
   const materials = preferredAiMaterials(node, inputs);
   const cached = materials.record;
   const prompt = materials.source === "cache" ? cachedText(cached) : promptDataText(input(node, inputs, "Prompt") ?? cached.values[0]);
@@ -2625,8 +2630,12 @@ async function executeAiRuntimeNode(node: WorkflowNodeLike, inputs: Record<strin
     const json = node.data.label === "Gọi AI trả JSON";
     const inputReserve = estimatedAiInputTokens(requestText);
     const maxOutputTokens = aiBudget(settings, inputReserve);
-    const payload = await apiJson({ action: "ai", apiKey: settings.apiKey, model: settings.model, maxOutputTokens, system: `${systemPrompt}\n${json ? "Chỉ trả JSON hợp lệ, không dùng markdown." : ""}`, prompt, json, promptCacheKey: materials.record.cacheKey });
+    const payload = await apiJson({ action: "ai", provider: settings.provider, apiKey: settings.apiKey, model: settings.model, temperature: settings.temperature, maxOutputTokens, system: `${systemPrompt}\n${json ? "Chỉ trả JSON hợp lệ, không dùng markdown." : ""}`, prompt, json, promptCacheKey: materials.record.cacheKey });
     return withAiInputCache(node, json ? "AIJson" : "AIText", attachAiUsage(payload.result, payload.usage, settings, inputReserve), materials);
+  }
+
+  if (settings.provider === "Ollama") {
+    throw new Error(`${node.data.label} hiện cần OpenAI vì tác vụ này gửi media trực tiếp. Ollama đã dùng được cho node Xử lý văn bản bằng AI (văn bản/JSON).`);
   }
 
   if (node.data.label === "Phân tích hình ảnh bằng AI") {

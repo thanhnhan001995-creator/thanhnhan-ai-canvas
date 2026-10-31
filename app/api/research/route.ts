@@ -295,7 +295,49 @@ function outputTokenLimit(raw: unknown) {
   return Number.isFinite(value) && value >= 16 ? Math.min(50_000, value) : undefined;
 }
 
-async function callAi(system: string, prompt: string, requestedModel?: string, suppliedApiKey?: string, maxOutputTokens?: unknown, promptCacheKey?: string) {
+async function callOllama(system: string, prompt: string, requestedModel?: string, maxOutputTokens?: unknown, temperature?: unknown) {
+  const model = String(requestedModel ?? "").trim();
+  if (!model) throw new Error("Chưa chọn model Ollama. Mở Workflow → Quản lý AI, quét rồi thêm model vào danh mục.");
+  const numPredict = outputTokenLimit(maxOutputTokens);
+  const rawTemperature = Number(temperature);
+  const response = await fetch("http://127.0.0.1:11434/api/chat", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      model,
+      stream: false,
+      // Qwen3 và một số model local dành toàn bộ giới hạn ngắn cho reasoning
+      // nếu không tắt thinking. Node workflow cần nhận output thực để chuyển
+      // sang bước sau, không lưu reasoning nội bộ làm kết quả.
+      think: false,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: prompt },
+      ],
+      options: {
+        ...(numPredict ? { num_predict: numPredict } : {}),
+        ...(Number.isFinite(rawTemperature) ? { temperature: Math.max(0, Math.min(2, rawTemperature)) } : {}),
+      },
+    }),
+  });
+  const payload = await response.json() as JsonRecord;
+  if (!response.ok) {
+    const message = payload.error;
+    throw new Error(typeof message === "string" ? message : `Ollama trả về lỗi ${response.status}`);
+  }
+  const message = payload.message && typeof payload.message === "object" ? payload.message as JsonRecord : {};
+  const text = String(message.content ?? "").trim();
+  if (!text) throw new Error("Ollama không trả về nội dung.");
+  const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  let result: unknown;
+  try { result = JSON.parse(cleaned) as unknown; } catch { result = { text }; }
+  const inputTokens = Number(payload.prompt_eval_count ?? 0);
+  const outputTokens = Number(payload.eval_count ?? 0);
+  return { result, usage: { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens, cachedInputTokens: 0, model } };
+}
+
+async function callAi(system: string, prompt: string, requestedModel?: string, suppliedApiKey?: string, maxOutputTokens?: unknown, promptCacheKey?: string, provider = "OpenAI", temperature?: unknown) {
+  if (provider === "Ollama") return callOllama(system, prompt, requestedModel, maxOutputTokens, temperature);
   const apiKey = String(suppliedApiKey ?? "").trim();
   if (!apiKey) throw new Error("Chưa có API key. Nhập trong Thiết lập AI hoặc nối cổng APIKey.");
   const baseUrl = "https://api.openai.com/v1";
@@ -539,7 +581,16 @@ export async function POST(request: Request) {
     if (action === "ai") {
       const json = Boolean(body.json);
       const system = `${String(body.system ?? "")} ${json ? "Trả về JSON hợp lệ, không dùng markdown." : ""}`.trim();
-      return Response.json(await callAi(system, String(body.prompt ?? ""), typeof body.model === "string" ? body.model : undefined, typeof body.apiKey === "string" ? body.apiKey : undefined, body.maxOutputTokens, typeof body.promptCacheKey === "string" ? body.promptCacheKey : undefined));
+      return Response.json(await callAi(
+        system,
+        String(body.prompt ?? ""),
+        typeof body.model === "string" ? body.model : undefined,
+        typeof body.apiKey === "string" ? body.apiKey : undefined,
+        body.maxOutputTokens,
+        typeof body.promptCacheKey === "string" ? body.promptCacheKey : undefined,
+        String(body.provider ?? "OpenAI"),
+        body.temperature,
+      ));
     }
     return errorResponse(new Error("Tác vụ nghiên cứu không hợp lệ"), 400);
   } catch (error) {

@@ -8,6 +8,7 @@ const { SELF_CONFIGURED_NODE_NAMES, getPortContract, portTypesCompatible } = awa
 const { hasNodeExecutor } = await import("../../app/node-execution.ts");
 const { displayPortLabel, getPortVisual } = await import("../../app/port-library.ts");
 const { currentOpenAiModel, getAiModelCapabilities, openAiImageDetail, openAiResponseVerbosity, replacementForRetiredOpenAiModel, supportsOpenAiReasoning } = await import("../../app/ai-model-capabilities.ts");
+const { localAiModelIds, mergeScannedOllamaModel, normalizeLocalAiRegistry, removeLocalAiModel } = await import("../../app/local-ai-registry.ts");
 const { nextNodeName } = await import("../../app/node-identity.ts");
 
 function workflowNode(label, inputTypes, outputTypes, config = {}) {
@@ -23,6 +24,20 @@ function workflowNode(label, inputTypes, outputTypes, config = {}) {
     },
   };
 }
+
+test("local Ollama registry keeps only user-added models and never removes the installed model", () => {
+  const initial = normalizeLocalAiRegistry([
+    { id: "qwen3:4b", provider: "Ollama", size: 2_500, addedAt: "2026-10-31T00:00:00.000Z" },
+    { id: "qwen3:4b", provider: "Other", addedAt: "bad" },
+    { id: "", provider: "Ollama" },
+  ]);
+  assert.deepEqual(localAiModelIds(initial), ["qwen3:4b"]);
+  const added = mergeScannedOllamaModel(initial, { id: "qwen3-vl:2b-instruct", provider: "Ollama", size: 1_930_568_531, modifiedAt: "2026-10-29T23:56:16Z" }, "2026-10-31T01:00:00.000Z");
+  assert.deepEqual(localAiModelIds(added), ["qwen3-vl:2b-instruct", "qwen3:4b"]);
+  assert.deepEqual(localAiModelIds(removeLocalAiModel(added, "qwen3:4b")), ["qwen3-vl:2b-instruct"]);
+  assert.equal(getAiModelCapabilities("Ollama", "qwen3:4b").text, "supported");
+  assert.equal(getAiModelCapabilities("Ollama", "embeddinggemma:latest").text, "unsupported");
+});
 
 test("basic catalog covers valid primitive nodes without replacing the advanced catalog", () => {
   const primitiveNames = new Set(NODE_SPECS.map((spec) => spec.name));

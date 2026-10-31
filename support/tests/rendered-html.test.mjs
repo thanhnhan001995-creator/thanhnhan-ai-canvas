@@ -495,6 +495,29 @@ test("Electron preload exposes the workflow reader used by Gọi workflow", asyn
   assert.match(preload, /readWorkflowAtPath: \(filePath\) => ipcRenderer\.invoke\("content-flow:read-workflow-at-path", filePath\)/);
 });
 
+test("Workflow local AI manager scans Ollama and only exposes user-managed models", async () => {
+  const [page, registry, localAiRoute, researchRoute, client] = await Promise.all([
+    readFile(new URL("../../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../app/local-ai-registry.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../app/api/local-ai/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../app/api/research/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../app/research-client.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(page, /Workflow.*Quản lý AI|Quản lý AI/);
+  assert.match(page, /fetch\("\/api\/local-ai"/);
+  assert.match(page, /Gỡ chỉ xóa khỏi danh mục app, không xóa model khỏi máy/);
+  assert.match(page, /localAiModels=\{localAiModels\}/);
+  assert.match(registry, /LOCAL_AI_REGISTRY_STORAGE_KEY/);
+  assert.match(registry, /removeLocalAiModel/);
+  assert.match(localAiRoute, /127\.0\.0\.1:11434\/api\/tags/);
+  assert.match(localAiRoute, /Không thể kết nối Ollama/);
+  assert.match(researchRoute, /function callOllama/);
+  assert.match(researchRoute, /127\.0\.0\.1:11434\/api\/chat/);
+  assert.match(researchRoute, /think: false/);
+  assert.match(client, /provider: settings\.provider/);
+  assert.match(client, /settings\.provider !== "Ollama" && !settings\.apiKey/);
+});
+
 test("runtime AI calls require a key supplied by a workflow node, never .env", async () => {
   const [route, client, service, launcher, page] = await Promise.all([
     readFile(new URL("../../app/api/research/route.ts", import.meta.url), "utf8"),
