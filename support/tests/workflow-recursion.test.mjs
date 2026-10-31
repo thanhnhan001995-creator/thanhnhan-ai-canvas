@@ -24,7 +24,6 @@ test("detects direct workflow recursion A to A with the full call chain", async 
   assert.equal(cycles[0].originCall.id, "call-a");
   assert.deepEqual(cycles[0].chain, ["Workflow A", "Workflow A"]);
 });
-
 test("detects indirect workflow recursion A to B to C to A with the full chain", async () => {
   const a = workflow("A", [{ id: "call-b", target: "B" }]);
   const b = workflow("B", [{ id: "call-c", target: "C" }]);

@@ -54,3 +54,5 @@ yarn-error.log*
 
 # User-maintained technical request register
 /YCKT.xlsx
+/YCKT.xlsx.inspect.ndjson
+/support/yckt-tmp/
