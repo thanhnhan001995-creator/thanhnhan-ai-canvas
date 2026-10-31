@@ -1751,6 +1751,14 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm test` — build thành công, **54/54** bài kiểm tra đạt.
 
+## 2026-10-31 +07:00 — Chọn workflow trên web và chuẩn hóa tên cổng
+
+- Node `Gọi workflow` nay nhận file `.tess` từ input trình duyệt khi không có Tesseract Desktop. App đọc và lưu bản workflow nhúng vào node, đồng bộ cổng, kiểm tra đệ quy và cho phép chạy thử không cần IPC/đường dẫn máy.
+- Bản Desktop vẫn ưu tiên đọc file qua IPC để dùng đúng tệp tại đường dẫn đã chọn.
+- Tên cổng của `Cổng vào`/`Cổng ra` tự bỏ khoảng trắng và thay bằng `_`. Khi người dùng rời ô tên để trống, tên trở về mặc định `Cổng_1`, `Cổng_2`…; cổng mới cũng dùng mẫu này.
+
+**Kiểm tra:** `npm test` — build thành công, **54/54** bài kiểm tra đạt.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 

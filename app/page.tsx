@@ -466,12 +466,14 @@ type WorkflowInterfaceShape = {
 };
 
 type CalledWorkflowReference = {
-  /** File .tess đã chọn hoặc workflow đang mở trong canvas hiện tại. */
+  /** File .tess đã chọn, bản nhúng từ trình duyệt, hoặc workflow đang mở. */
   source?: "file" | "current" | "open-tab";
   path: string;
   workflowId: string;
   workflowInterface: WorkflowInterfaceShape;
   tabId?: string;
+  /** Bản .tess đã đọc qua input web, để chạy thử không cần Tesseract Desktop. */
+  embeddedWorkflow?: WorkflowDocumentLike;
 };
 
 const WORKFLOW_INPUT_GATEWAY_FAMILY = "Cổng vào";
@@ -498,6 +500,11 @@ function createWorkflowPortId() {
   return `port-${suffix}`;
 }
 
+function normalizeWorkflowPortName(value: unknown, index: number): string {
+  const name = typeof value === "string" ? value.trim().replace(/\s+/g, "_") : "";
+  return name || `Cổng_${index + 1}`;
+}
+
 function normalizeWorkflowGatewayPorts(value: unknown): WorkflowGatewayPort[] {
   if (!Array.isArray(value)) return [];
   const usedIds = new Set<string>();
@@ -506,7 +513,7 @@ function normalizeWorkflowGatewayPorts(value: unknown): WorkflowGatewayPort[] {
     const raw = item as Record<string, unknown>;
     const id = typeof raw.id === "string" && raw.id.trim() && !usedIds.has(raw.id.trim()) ? raw.id.trim() : createWorkflowPortId();
     usedIds.add(id);
-    const name = typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : `Cổng ${index + 1}`;
+    const name = normalizeWorkflowPortName(raw.name, index);
     const type = typeof raw.type === "string" && raw.type.trim() ? raw.type.trim() : "Dữ liệu";
     const description = typeof raw.description === "string" && raw.description.trim() ? raw.description.trim() : undefined;
     return [{ id, name, type, required: raw.required === true, ...(description ? { description } : {}) }];
@@ -2958,6 +2965,7 @@ function WorkflowApp() {
     return [{ ...initial, savedContentKey: workflowTabContentKey(initial) }];
   });
   const [activeWorkflowTabId, setActiveWorkflowTabId] = useState(initialWorkflowTabId);
+  const [gatewayPortNameDrafts, setGatewayPortNameDrafts] = useState<Record<string, string>>({});
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingGroupName, setEditingGroupName] = useState("");
   const [outlinerHeight, setOutlinerHeight] = useState(230);
@@ -4448,6 +4456,50 @@ function WorkflowApp() {
     }
   }, [rememberCanvasChange, setEdges, setNodes]);
 
+  const syncBrowserWorkflowReference = useCallback(async (nodeId: string, file: File) => {
+    try {
+      const workflow = parseWorkflowDocument(await file.text()) as WorkflowDocumentLike & { workflowId?: unknown; workflowInterface?: unknown };
+      if (!Array.isArray(workflow.nodes) || !Array.isArray(workflow.edges) || typeof workflow.workflowId !== "string" || !workflow.workflowId.trim()) {
+        throw new Error("Workflow cần gọi chưa có ID ổn định. Hãy mở và lưu lại workflow đó bằng Tesseract.");
+      }
+      const workflowInterface = normalizeWorkflowInterfaceShape(workflow.workflowInterface);
+      const browserPath = `browser://${file.name}`;
+      const reference: CalledWorkflowReference = {
+        source: "file",
+        path: browserPath,
+        workflowId: workflow.workflowId,
+        workflowInterface,
+        embeddedWorkflow: workflow,
+      };
+      const callPorts = portsForCalledWorkflow(workflowInterface);
+      rememberCanvasChange();
+      setEdges((current) => current.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+      setNodes((current) => current.map((node) => node.id === nodeId ? {
+        ...node,
+        data: {
+          ...node.data,
+          calledWorkflow: reference,
+          inputs: callPorts.inputs,
+          outputs: callPorts.outputs,
+          config: {
+            ...node.data.config,
+            workflowPath: workflowNameFromPath(file.name),
+            workflowPathPaths: JSON.stringify([browserPath]),
+          },
+          validationError: undefined,
+          status: "idle",
+          beacon: "uncheck",
+          output: undefined,
+        },
+      } : node));
+      setNotice(`Đã nạp và đồng bộ ${workflowInterface.inputs.length} cổng vào, ${workflowInterface.outputs.length} cổng ra từ “${workflowNameFromPath(file.name)}” trong trình duyệt.`);
+      return true;
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Không thể đọc workflow cần gọi từ tệp đã chọn.");
+      return false;
+    }
+  }, [rememberCanvasChange, setEdges, setNodes]);
+
   const syncCurrentWorkflowReference = useCallback((nodeId: string) => {
     const workflowInterface = workflowInterfaceFromNodes(nodes);
     const reference: CalledWorkflowReference = {
@@ -4563,6 +4615,8 @@ function WorkflowApp() {
           : { error: "Workflow đang mở được gọi không còn tồn tại. Hãy chọn lại tại node Gọi workflow." }
         : reference?.source === "current" || configuredPath === `current://${workflowId}`
           ? { path: configuredPath, workflow: currentDocument }
+          : reference?.embeddedWorkflow
+            ? { path: configuredPath, workflow: reference.embeddedWorkflow }
           : await window.contentFlowDesktop?.readWorkflowAtPath(configuredPath);
       if (!loaded?.workflow || !loaded.path || loaded.error) throw new Error(loaded?.error || `Không thể đọc workflow cần gọi: ${configuredPath}`);
       const document = loaded.workflow as WorkflowDocumentLike & { workflowId?: unknown; workflowInterface?: unknown };
@@ -4849,6 +4903,11 @@ function WorkflowApp() {
         return { key: currentDocument.workflowId, label: currentDocument.name || "Workflow hiện tại", document: currentDocument };
       }
       if (!configuredPath) throw new Error("chưa chọn workflow cần gọi.");
+      if (reference?.embeddedWorkflow) {
+        const document = reference.embeddedWorkflow as RecursionDocument;
+        if (!Array.isArray(document.nodes) || !Array.isArray(document.edges) || !document.workflowId) throw new Error(`workflow “${workflowNameFromPath(configuredPath)}” không hợp lệ hoặc chưa được lưu bằng Tesseract.`);
+        return { key: document.workflowId, label: workflowNameFromPath(configuredPath), document };
+      }
       const loaded = await window.contentFlowDesktop?.readWorkflowAtPath(configuredPath);
       if (!loaded?.workflow || loaded.error) throw new Error(loaded?.error || `không thể đọc “${configuredPath}”.`);
       const document = loaded.workflow as RecursionDocument;
@@ -5783,9 +5842,26 @@ function WorkflowApp() {
                         <div className="workflow-gateway-port" key={port.id}>
                           <input
                             aria-label={`Tên cổng ${index + 1}`}
-                            value={port.name}
+                            value={gatewayPortNameDrafts[port.id] ?? port.name}
                             placeholder="Tên cổng"
-                            onChange={(event) => updateWorkflowGatewayPorts((current) => current.map((item) => item.id === port.id ? { ...item, name: event.target.value } : item))}
+                            onChange={(event) => setGatewayPortNameDrafts((current) => ({
+                              ...current,
+                              [port.id]: event.target.value.replace(/\s+/g, "_"),
+                            }))}
+                            onBlur={() => {
+                              const draft = gatewayPortNameDrafts[port.id];
+                              if (draft === undefined) return;
+                              const name = normalizeWorkflowPortName(draft, index);
+                              updateWorkflowGatewayPorts((current) => current.map((item) => item.id === port.id ? { ...item, name } : item));
+                              setGatewayPortNameDrafts((current) => {
+                                const next = { ...current };
+                                delete next[port.id];
+                                return next;
+                              });
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") event.currentTarget.blur();
+                            }}
                           />
                           <input
                             aria-label={`Kiểu dữ liệu cổng ${index + 1}`}
@@ -5822,7 +5898,7 @@ function WorkflowApp() {
                         className="add-workflow-gateway-port"
                         onClick={() => updateWorkflowGatewayPorts((current) => [...current, {
                           id: createWorkflowPortId(),
-                          name: `Cổng ${current.length + 1}`,
+                          name: `Cổng_${current.length + 1}`,
                           type: "Dữ liệu",
                           required: false,
                         }])}
@@ -5931,6 +6007,20 @@ function WorkflowApp() {
                           }} disabled={isFileStorageNode(selectedNode) && selectedStorageFolderConnected}>Browse…</button>
                         </div>
                         <small className="field-help selected-files">{selectedStorageFolderConnected ? "Đã nhận thư mục từ cổng Folder. Tháo dây để chọn ngay trong node." : field.help}</small>
+                      </>
+                    ) : field.type === "file" && nodeFamilyOf(selectedNode) === "Gọi workflow" && field.key === "workflowPath" && !window.contentFlowDesktop?.pickFiles ? (
+                      <>
+                        <input
+                          type="file"
+                          accept={field.accept}
+                          onChange={(event) => {
+                            const file = event.currentTarget.files?.[0];
+                            event.currentTarget.value = "";
+                            if (file) void syncBrowserWorkflowReference(selectedNode.id, file);
+                          }}
+                        />
+                        <small className="field-help selected-files">Chọn file .tess để nạp workflow vào node và chạy thử trong trình duyệt. Bản workflow được lưu kèm node gọi.</small>
+                        {selectedNode.data.validationError && <small className="field-error">{selectedNode.data.validationError}</small>}
                       </>
                     ) : field.type === "file" && field.persistPaths && typeof window !== "undefined" && window.contentFlowDesktop?.pickFiles ? (
                       <>
