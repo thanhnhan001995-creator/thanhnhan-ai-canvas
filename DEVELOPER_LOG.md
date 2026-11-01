@@ -1875,6 +1875,16 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm.cmd test` — build thành công, **72/72** bài kiểm tra đạt. Regression xác nhận ba nhóm mới, preset cũ được đánh dấu tương thích/ẩn khỏi thư viện và các cổng FrameIndex/AIModel của video vẫn giữ nguyên.
 
+## 2026-11-01 +07:00 — PRM-01 đến PRM-03: Prompt thuần, biến và tương thích
+
+**Phạm vi:** Chuẩn hóa card Tạo prompt AI mà không biến prompt thành lời gọi API hoặc làm hỏng node cũ.
+
+- Card **Tạo prompt AI** nay có ba thao tác: **Prompt thuần**, **Tạo prompt từ dữ liệu**, **Soạn System prompt**. Đây đều là node dữ liệu, không gọi API và không yêu cầu AIModel/API key.
+- Prompt thuần nhận nội dung trực tiếp, cho phép chèn biến theo dạng `{{ten_bien}}`, nhận Dữ liệu làm ngữ cảnh tùy chọn hoặc bỏ qua ngữ cảnh theo lựa chọn người dùng. Biến không có giá trị được giữ nguyên placeholder để người dùng nhìn thấy phần còn thiếu.
+- Giữ nguyên executor/cổng `Prompt` và `SystemPrompt` cũ. Regression mới xác nhận prompt cũ còn tạo đúng nội dung, prompt thuần thay biến, đính kèm ngữ cảnh khi được chọn và toàn bộ catalog vẫn hợp lệ.
+
+**Kiểm tra:** `npm.cmd test` — build thành công, **72/72** bài kiểm tra đạt. Không đóng gói, không cập nhật bản cài và không push.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 

@@ -1826,6 +1826,14 @@ export const NODE_SPECS: NodeSpec[] = [
   },
   {
     "group": "AI & mô hình",
+    "order": 5.5,
+    "name": "Tạo prompt thuần",
+    "settings": "Nội dung prompt, chèn biến, ngữ cảnh tùy chọn",
+    "input": "Dữ liệu, Biến",
+    "output": "Prompt"
+  },
+  {
+    "group": "AI & mô hình",
     "order": 6,
     "name": "Gọi AI tạo văn bản",
     "settings": "Prompt, độ dài phản hồi, model dự phòng",

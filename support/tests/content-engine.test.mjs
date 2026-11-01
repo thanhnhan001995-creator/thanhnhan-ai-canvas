@@ -129,7 +129,7 @@ test("basic catalog covers valid primitive nodes without replacing the advanced 
     assert.ok(preset.nodes.length > 0, `${preset.label} has no steps`);
     for (const label of preset.nodes) assert.ok(primitiveNames.has(label), `${preset.label} references missing node ${label}`);
   }
-  assert.equal(NODE_SPECS.length, 241);
+  assert.equal(NODE_SPECS.length, 242);
   assert.deepEqual(BASIC_NODE_PRESETS.find((preset) => preset.id === "ai-task")?.nodes, ["Thực thi tác vụ AI"]);
   assert.deepEqual(BASIC_NODE_PRESETS.find((preset) => preset.id === "ai-check")?.nodes, ["Kiểm tra bằng AI"]);
   assert.equal(BASIC_NODE_PRESETS.find((preset) => preset.id === "ai-media")?.hiddenInLibrary, true);
@@ -287,6 +287,11 @@ test("AI prompt nodes return the composed prompt instead of a runtime stub", asy
   assert.match(prompt["output-1"], /Hãy tóm tắt dữ liệu/);
   assert.match(prompt["output-1"], /Video thử/);
   assert.match(prompt["output-1"], /Ưu tiên mốc thời gian/);
+
+  const pureNode = workflowNode("Tạo prompt thuần", ["Dữ liệu", "Biến"], ["Prompt"], { content: "Hãy tóm tắt {{topic}}.", contextMode: "Đính kèm cuối prompt" });
+  const pure = await executeWorkflowNode(pureNode, { "input-1": { title: "Nguồn thử" }, "input-2": { topic: "workflow" } }, new Map());
+  assert.match(pure["output-1"], /Hãy tóm tắt workflow/);
+  assert.match(pure["output-1"], /NGỮ CẢNH BỔ SUNG/);
 });
 
 test("generic AI task requires a connected profile and returns result, task spec, report and cache", async () => {

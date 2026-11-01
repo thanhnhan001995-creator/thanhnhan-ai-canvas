@@ -984,6 +984,7 @@ const OPTIONAL_INPUT_TYPES: Record<string, string[]> = {
   "Gọi AI tạo văn bản": ["CachedData"],
   "Gọi AI trả JSON": ["CachedData"],
   "Thực thi tác vụ AI": ["Dữ liệu", "Prompt", "SystemPrompt", "CachedData"],
+  "Tạo prompt thuần": ["Dữ liệu", "Biến"],
   "Kiểm tra bằng AI": ["CachedData"],
   "Phân tích hình ảnh bằng AI": ["CachedData", "AttentionRegion"],
   "Phân tích âm thanh bằng AI": ["CachedData"],
@@ -1212,6 +1213,10 @@ const AI_NODE_FIELDS: Record<string, ConfigField[]> = {
     { key: "template", label: "Mẫu prompt", type: "select", options: ["Tóm tắt dữ liệu", "Viết nội dung từ dữ liệu", "Phân tích và đề xuất", "Trích xuất dữ kiện", "Khác"], defaultValue: "Tóm tắt dữ liệu" },
     { key: "customTemplate", label: "Mẫu prompt tùy chỉnh", type: "textarea", placeholder: "Dùng {{data}} cho dữ liệu đầu vào", required: true, showWhen: { key: "template", value: "Khác" } },
     { key: "instructions", label: "Yêu cầu bổ sung", type: "textarea", placeholder: "Điều cần ưu tiên trong prompt...", help: "Không bắt buộc; để trống nếu không có điều kiện bổ sung." },
+  ],
+  "Tạo prompt thuần": [
+    { key: "content", label: "Nội dung prompt", type: "textarea", placeholder: "Viết prompt trực tiếp. Dùng {{ten_bien}} để chèn biến.", required: true, help: "Node chỉ xuất Prompt; không gọi AI và không cần API key." },
+    { key: "contextMode", label: "Ngữ cảnh đầu vào", type: "select", options: ["Đính kèm cuối prompt", "Không tự thêm"], defaultValue: "Đính kèm cuối prompt", help: "Dữ liệu nối vào là tùy chọn; khi đính kèm, node ghi rõ đó là ngữ cảnh bổ sung." },
   ],
   "Gọi AI tạo văn bản": [
     { key: "responseLength", label: "Độ dài phản hồi", type: "select", options: ["Ngắn", "Vừa", "Dài", "Rất dài"], defaultValue: "Vừa" },

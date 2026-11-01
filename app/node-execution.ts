@@ -3,7 +3,7 @@
 // không làm người dùng hiểu nhầm một node mô phỏng là node có thể chạy.
 const EXECUTABLE_LABELS = new Set([
   "Chọn nhà cung cấp AI", "Chọn mô hình AI", "Lựa chọn model AI", "Cache kết quả",
-  "Soạn system prompt", "Tạo prompt từ dữ liệu",
+  "Soạn system prompt", "Tạo prompt từ dữ liệu", "Tạo prompt thuần",
   "Gọi AI tạo văn bản", "Gọi AI trả JSON", "Thực thi tác vụ AI", "Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI",
   "Chấm điểm đầu ra AI", "Duyệt đầu ra AI", "Kiểm tra bằng AI",
   "Tạo ý tưởng", "Chấm điểm ý tưởng", "Xác định đối tượng xem", "Tạo góc tiếp cận", "Tạo dàn ý", "Viết nội dung",

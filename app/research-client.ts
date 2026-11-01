@@ -2450,6 +2450,18 @@ function promptDataText(value: unknown): string {
 
 function executeAiPromptNode(node: WorkflowNodeLike, inputs: Record<string, unknown>): Record<string, unknown> {
   const config = node.data.config;
+  if (node.data.label === "Tạo prompt thuần") {
+    const content = String(config.content ?? "").trim();
+    if (!content) throw new Error("Tạo prompt thuần cần Nội dung prompt.");
+    const variables = record(input(node, inputs, "Biến") ?? input(node, inputs, "Variable"));
+    const prompt = content.replace(/{{\s*([^{}\s]+)\s*}}/g, (_match, key) => {
+      const value = variables[key];
+      return value === undefined || value === null ? `{{${key}}}` : typeof value === "string" ? value : promptDataText(value);
+    });
+    const context = input(node, inputs, "Dữ liệu") ?? input(node, inputs, "Data");
+    if (context === undefined || String(config.contextMode ?? "Đính kèm cuối prompt") === "Không tự thêm") return output(node, prompt);
+    return output(node, `${prompt}\n\nNGỮ CẢNH BỔ SUNG:\n${promptDataText(context)}`);
+  }
   if (node.data.label === "Soạn system prompt") {
     const role = String(config.role === "Khác" ? config.customRole || "trợ lý AI" : config.role || "trợ lý AI");
     const rules = String(config.rules ?? "").trim();
@@ -3546,7 +3558,7 @@ export async function executeWorkflowNode(
   if (node.data.label === "Giảm độ phân giải ảnh") return executeImageResizeNode(node, inputs, store);
   if (node.data.label === "Tìm ảnh tương đồng") return executeImageSearchNode(node, inputs, store, reportProgress);
   if (["If/Else", "Switch"].includes(node.data.label)) return executeRoutingNode(node, inputs);
-  if (["Soạn system prompt", "Tạo prompt từ dữ liệu"].includes(node.data.label)) return executeAiPromptNode(node, inputs);
+  if (["Soạn system prompt", "Tạo prompt từ dữ liệu", "Tạo prompt thuần"].includes(node.data.label)) return executeAiPromptNode(node, inputs);
   if (node.data.label === "Thực thi tác vụ AI") return executeAiTaskNode(node, inputs);
   if (node.data.label === "Kiểm tra bằng AI") return executeAiCheckNode(node, inputs);
   if (["Gọi AI tạo văn bản", "Gọi AI trả JSON", "Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"].includes(node.data.label)) return executeAiRuntimeNode(node, inputs, store);
