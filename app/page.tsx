@@ -35,6 +35,7 @@ import { hasNodeExecutor } from "./node-execution.ts";
 import { currentOpenAiModel, getAiModelCapabilities, replacementForRetiredOpenAiModel, type CapabilityState } from "./ai-model-capabilities";
 import { LOCAL_AI_REGISTRY_STORAGE_KEY, localAiModelIds, mergeScannedOllamaModel, normalizeLocalAiRegistry, removeLocalAiModel, type LocalAiModel, type ScannedOllamaModel } from "./local-ai-registry";
 import { nextNodeName, nodeFamilyOf } from "./node-identity";
+import { ARTIFACT_TYPES, artifactOutputsForPorts, artifactSummary, executionDiagnostic, finishNodeRun, portCardinalityCompatible, portSpecFor, startNodeRun, unwrapArtifact, type Artifact, type ArtifactOutputMap, type ArtifactSummary, type ArtifactType, type NodeRunRecord, type PortCardinality } from "./data-contracts";
 import { createWorkflowId, normalizeWorkflowInterface, parseWorkflowDocument, prepareWorkflowForSave, serializeTessWorkflow, workflowNameFromPath } from "../shared/tess-document.mjs";
 import { findWorkflowReferenceCycles } from "../shared/workflow-recursion.mjs";
 
@@ -104,14 +105,29 @@ type Port = {
   type: PortType;
   connectSize?: PortConnectSize;
   required?: boolean;
+  /** Hợp đồng dữ liệu v1. Thiếu ở workflow cũ sẽ được suy ra từ `type`. */
+  artifactType?: ArtifactType;
+  cardinality?: PortCardinality;
 };
+
+function withPortDataContract(port: Port): Port {
+  const spec = portSpecFor(port);
+  return { ...port, artifactType: spec.artifactType, cardinality: spec.cardinality };
+}
+
+function portsCanConnect(source: Port, target: Port): boolean {
+  const sourceSpec = portSpecFor(source);
+  const targetSpec = portSpecFor(target);
+  return portTypesCompatible(source, target) && portCardinalityCompatible(sourceSpec, targetSpec);
+}
 
 /**
  * Hiển thị cùng một hợp đồng dữ liệu ở cả hai đầu cổng. Người dùng cần biết
  * chính xác cổng vào yêu cầu gì trước khi kéo dây, chứ không chỉ ở cổng ra.
  */
 function portInformationTooltip(port: Port): string {
-  return `${portContractLabel({ type: port.type, connectSize: port.connectSize })} · ${displayPortLabel(port.type)}`;
+  const spec = portSpecFor(port);
+  return `${portContractLabel({ type: port.type, connectSize: port.connectSize })} · ${displayPortLabel(port.type)} · ${spec.artifactType} · ${spec.cardinality === "many" ? "nhiều" : "một"}`;
 }
 
 type ConfigField = {
@@ -440,6 +456,10 @@ interface ContentNodeData extends Record<string, unknown> {
   beacon?: NodeBeacon;
   paused?: boolean;
   output?: Record<string, unknown>;
+  /** Metadata Artifact của output gần nhất. Payload lớn tiếp tục nằm trong runtime/file local. */
+  artifacts?: ArtifactSummary[];
+  /** Lần chạy gần nhất, độc lập với output để chẩn đoán rõ tiến trình và lỗi. */
+  run?: NodeRunRecord;
   duration?: number;
   progress?: ExecutionProgress;
   basicPresetId?: string;
@@ -474,6 +494,9 @@ type WorkflowGatewayPort = {
   id: string;
   name: string;
   type: string;
+  /** Hợp đồng v1; field vắng mặt trong .tess cũ sẽ được suy ra từ type. */
+  artifactType?: ArtifactType;
+  cardinality?: PortCardinality;
   required: boolean;
   description?: string;
 };
@@ -535,17 +558,27 @@ function normalizeWorkflowGatewayPorts(value: unknown): WorkflowGatewayPort[] {
     const name = normalizeWorkflowPortName(raw.name, index);
     const type = typeof raw.type === "string" && raw.type.trim() ? raw.type.trim() : "Dữ liệu";
     const description = typeof raw.description === "string" && raw.description.trim() ? raw.description.trim() : undefined;
-    return [{ id, name, type, required: raw.required === true, ...(description ? { description } : {}) }];
+    const spec = portSpecFor({
+      id,
+      label: name,
+      type,
+      required: raw.required === true,
+      artifactType: ARTIFACT_TYPES.includes(raw.artifactType as ArtifactType) ? raw.artifactType as ArtifactType : undefined,
+      cardinality: raw.cardinality === "many" || raw.cardinality === "one" ? raw.cardinality : undefined,
+    });
+    return [{ id, name, type, required: spec.required, artifactType: spec.artifactType, cardinality: spec.cardinality, ...(description ? { description } : {}) }];
   });
 }
 
 function portsForWorkflowGateway(direction: "input" | "output", gatewayPorts: WorkflowGatewayPort[]): Pick<NodeDefinition, "inputs" | "outputs"> {
-  const ports = gatewayPorts.map((port) => ({
+  const ports = gatewayPorts.map((port) => withPortDataContract({
     id: `workflow-port-${port.id}`,
     label: port.name,
     type: port.type,
     connectSize: getPortConnectSize(port.type),
     required: direction === "output" ? port.required : false,
+    artifactType: port.artifactType,
+    cardinality: port.cardinality,
   }));
   return direction === "input" ? { inputs: [], outputs: ports } : { inputs: ports, outputs: [] };
 }
@@ -565,12 +598,14 @@ function normalizeWorkflowInterfaceShape(value: unknown): WorkflowInterfaceShape
 }
 
 function portsForCalledWorkflow(workflowInterface: WorkflowInterfaceShape): Pick<NodeDefinition, "inputs" | "outputs"> {
-  const toPorts = (ports: WorkflowGatewayPort[], required: boolean) => ports.map((port) => ({
+  const toPorts = (ports: WorkflowGatewayPort[], required: boolean) => ports.map((port) => withPortDataContract({
     id: `workflow-port-${port.id}`,
     label: port.name,
     type: port.type,
     connectSize: getPortConnectSize(port.type),
     required: required && port.required,
+    artifactType: port.artifactType,
+    cardinality: port.cardinality,
   }));
   return {
     inputs: toPorts(workflowInterface.inputs, true),
@@ -870,13 +905,13 @@ function splitContract(value: string): string[] {
 
 function makePorts(value: string, prefix: "input" | "output", required: boolean): Port[] {
   return splitContract(value)
-    .map((type, index) => ({
-      id: prefix + "-" + (index + 1),
-      label: displayPortLabel(type),
-      type,
-       connectSize: getPortConnectSize(type),
-      required,
-    }))
+    .map((type, index) => withPortDataContract({
+        id: prefix + "-" + (index + 1),
+        label: displayPortLabel(type),
+        type,
+        connectSize: getPortConnectSize(type),
+        required,
+      }))
     .sort((left, right) => left.label.localeCompare(right.label, "vi", { sensitivity: "base" }));
 }
 
@@ -921,6 +956,8 @@ const TRANSCRIPT_TERMS_INPUT_PORT: Port = {
   type: "Thuật ngữ",
   connectSize: "down",
   required: false,
+  artifactType: "Any",
+  cardinality: "many",
 };
 
 function inputPortsForSpec(spec: { group: string; name: string; input: string }): Port[] {
@@ -2307,16 +2344,16 @@ function connectionFromSourceHandle(source: ContentFlowNode, sourceHandle: strin
   const output = source.data.outputs.find((port) => port.id === sourceHandle);
   if (!output) return null;
   const input = target.data.inputs.find((port) => (
-    !edges.some((edge) => edge.target === target.id && edge.targetHandle === port.id)
-    && portTypesCompatible(output, port)
+    (portSpecFor(port).cardinality === "many" || !edges.some((edge) => edge.target === target.id && edge.targetHandle === port.id))
+    && portsCanConnect(output, port)
   ));
   return input ? { source: source.id, sourceHandle: output.id, target: target.id, targetHandle: input.id } : null;
 }
 
 function connectionToTargetHandle(source: ContentFlowNode, target: ContentFlowNode, targetHandle: string, edges: Edge[]): Connection | null {
   const input = target.data.inputs.find((port) => port.id === targetHandle);
-  if (!input || edges.some((edge) => edge.target === target.id && edge.targetHandle === input.id)) return null;
-  const output = source.data.outputs.find((port) => portTypesCompatible(port, input));
+  if (!input || (portSpecFor(input).cardinality === "one" && edges.some((edge) => edge.target === target.id && edge.targetHandle === input.id))) return null;
+  const output = source.data.outputs.find((port) => portsCanConnect(port, input));
   return output ? { source: source.id, sourceHandle: output.id, target: target.id, targetHandle: input.id } : null;
 }
 
@@ -3974,8 +4011,8 @@ function WorkflowApp() {
       const output = source?.data.outputs.find((port) => port.id === connection.sourceHandle);
       const input = target?.data.inputs.find((port) => port.id === connection.targetHandle);
       if (!source || !target || !output || !input || source.id === target.id) return false;
-      if (edges.some((edge) => edge.target === target.id && edge.targetHandle === input.id)) return false;
-      return portTypesCompatible(output, input);
+      if (portSpecFor(input).cardinality === "one" && edges.some((edge) => edge.target === target.id && edge.targetHandle === input.id)) return false;
+      return portsCanConnect(output, input);
     },
     [edges, nodes],
   );
@@ -3983,7 +4020,7 @@ function WorkflowApp() {
   const onConnect = useCallback(
     (connection: Connection) => {
       if (!isValidConnection(connection)) {
-        setNotice("Không thể nối: kiểu dữ liệu không phù hợp hoặc cổng đã có đầu vào.");
+        setNotice("Không thể nối: kiểu dữ liệu hoặc số lượng dữ liệu không phù hợp, hoặc cổng đơn đã có đầu vào.");
         return;
       }
       rememberCanvasChange();
@@ -5040,6 +5077,7 @@ function WorkflowApp() {
     if ((await checkWorkflowWithRecursion()).length) return;
     resetAiTokenUsage();
     const localMediaRunId = crypto.randomUUID();
+    const workflowRunId = crypto.randomUUID();
     beginLocalMediaWorkflowRun(localMediaRunId);
     const control = { paused: false, stopped: false, resume: undefined as (() => void) | undefined };
     runControlRef.current = control;
@@ -5049,7 +5087,19 @@ function WorkflowApp() {
       ...node,
       data: node.data.paused
         ? { ...node.data, status: "idle", beacon: "paused", progress: undefined }
-        : { ...node.data, status: "queued", output: undefined, progress: { message: "Đang chờ các node đầu vào hoàn tất.", detail: "Node sẽ tự chạy khi đủ dữ liệu." } },
+        : {
+          ...node.data,
+          status: "queued",
+          output: undefined,
+          artifacts: undefined,
+          progress: { message: "Đang chờ các node đầu vào hoàn tất.", detail: "Node sẽ tự chạy khi đủ dữ liệu." },
+          run: startNodeRun({
+            runId: workflowRunId,
+            nodeId: node.id,
+            status: "queued",
+            progress: { message: "Đang chờ các node đầu vào hoàn tất.", detail: "Node sẽ tự chạy khi đủ dữ liệu." },
+          }),
+        },
     })));
 
     const workingNodes = nodes.map((node) => ({ ...node, data: { ...node.data } }));
@@ -5057,6 +5107,10 @@ function WorkflowApp() {
     const remaining = new Set(workingNodes.filter((node) => !node.data.paused).map((node) => node.id));
     const completed = new Set<string>();
     const outputs = new Map<string, Record<string, unknown>>();
+    // Bản runtime của output dùng Artifact để giữ type, provenance và trạng
+    // thái. Executor cũ vẫn nhận payload thô qua unwrapArtifact trong giai
+    // đoạn chuyển đổi, nên workflow .tess cũ không bị hỏng.
+    const artifactOutputs = new Map<string, ArtifactOutputMap>();
     let failed = false;
 
     // Lệnh workflow cũng được chuyển đến media service: FFmpeg bị treo/tiếp tục
@@ -5125,10 +5179,25 @@ function WorkflowApp() {
 
         const nodeInputs: Record<string, unknown> = {};
         const inputSources: Record<string, { outputName: string }> = {};
+        const nodeInputArtifacts: Artifact[] = [];
         edges.filter((edge) => edge.target === node.id).forEach((edge) => {
           const sourceOutput = outputs.get(edge.source);
           if (edge.targetHandle && edge.sourceHandle && sourceOutput) {
-            nodeInputs[edge.targetHandle] = sourceOutput[edge.sourceHandle];
+            const transportedArtifact = artifactOutputs.get(edge.source)?.[edge.sourceHandle];
+            const transportedValue = transportedArtifact
+              ? unwrapArtifact(transportedArtifact)
+              : sourceOutput[edge.sourceHandle];
+            const targetPort = node.data.inputs.find((port) => port.id === edge.targetHandle);
+            if (targetPort && portSpecFor(targetPort).cardinality === "many") {
+              const current = Array.isArray(nodeInputs[edge.targetHandle]) ? nodeInputs[edge.targetHandle] as unknown[] : [];
+              const values = transportedArtifact?.cardinality === "many" && Array.isArray(transportedValue)
+                ? transportedValue
+                : [transportedValue];
+              nodeInputs[edge.targetHandle] = [...current, ...values];
+            } else {
+              nodeInputs[edge.targetHandle] = transportedValue;
+            }
+            if (transportedArtifact) nodeInputArtifacts.push(transportedArtifact);
             const sourcePort = workingNodes.find((item) => item.id === edge.source)?.data.outputs.find((port) => port.id === edge.sourceHandle);
             const outputName = String(sourcePort?.label ?? sourcePort?.type ?? "").trim().replace(/\[\]$/, "");
             if (outputName) inputSources[edge.targetHandle] = { outputName };
@@ -5137,6 +5206,21 @@ function WorkflowApp() {
         if (Object.keys(inputSources).length) nodeInputs.__contentFlowInputSources = inputSources;
 
         try {
+          setNodes((current) => current.map((item) => item.id === node.id && item.data.status === "running"
+            ? {
+              ...item,
+              data: {
+                ...item.data,
+                run: startNodeRun({
+                  runId: workflowRunId,
+                  nodeId: item.id,
+                  status: "running",
+                  inputs: nodeInputArtifacts.map(artifactSummary),
+                  progress: item.data.progress,
+                }),
+              },
+            }
+            : item));
           if (hasReusableStoredFiles(node)) await hydrateStoredFiles(node);
           if (nodeFamilyOf(node) !== "Gọi workflow") {
             for (const field of node.data.configFields.filter((field) => field.persistPaths)) {
@@ -5155,6 +5239,12 @@ function WorkflowApp() {
               : item));
           });
           outputs.set(node.id, output);
+          const outputArtifacts = artifactOutputsForPorts(output, node.data.outputs, {
+            workflowId,
+            nodeId: node.id,
+            runId: workflowRunId,
+          });
+          artifactOutputs.set(node.id, outputArtifacts);
           completed.add(node.id);
           remaining.delete(node.id);
           const duration = Math.round(performance.now() - start);
@@ -5169,6 +5259,8 @@ function WorkflowApp() {
                 status: "success",
                 beacon: "ready",
                 output,
+                artifacts: Object.values(outputArtifacts).map(artifactSummary),
+                run: finishNodeRun(item.data.run, "success", { outputs: Object.values(outputArtifacts).map(artifactSummary) }),
                 duration,
                 progress: undefined,
               },
@@ -5178,7 +5270,18 @@ function WorkflowApp() {
           if (control.stopped) break;
           const message = error instanceof Error ? error.message : "Lỗi thực thi không xác định";
           const diagnostic = error && typeof error === "object" ? (error as { executionDiagnostic?: unknown }).executionDiagnostic : undefined;
-          setNodes((current) => current.map((item) => item.id === node.id ? { ...item, data: { ...item.data, status: "error", beacon: "error", output: { error: message, ...(diagnostic ? { diagnostic } : {}) }, progress: undefined } } : item));
+          const runDiagnostic = executionDiagnostic(error);
+          setNodes((current) => current.map((item) => item.id === node.id ? {
+            ...item,
+            data: {
+              ...item.data,
+              status: "error",
+              beacon: "error",
+              output: { error: message, ...(diagnostic ? { diagnostic } : {}), runDiagnostic },
+              run: finishNodeRun(item.data.run, "failed", { diagnostic: runDiagnostic }),
+              progress: undefined,
+            },
+          } : item));
           setNotice(`Node “${node.data.label}” gặp lỗi: ${message}`);
           failed = true;
           break;
@@ -5188,7 +5291,7 @@ function WorkflowApp() {
 
     if (control.stopped) {
       setNodes((current) => current.map((node) => node.data.status === "running" || node.data.status === "queued"
-        ? { ...node, data: { ...node.data, status: "idle", beacon: node.data.paused ? "paused" : "uncheck", progress: undefined } }
+        ? { ...node, data: { ...node.data, status: "idle", beacon: node.data.paused ? "paused" : "uncheck", run: finishNodeRun(node.data.run, "cancelled"), progress: undefined } }
         : node));
       setNotice(`Đã dừng workflow. Hoàn tất ${completed.size} node trước khi dừng.`);
     } else if (!failed) {
@@ -5340,8 +5443,8 @@ function WorkflowApp() {
     if (!activePortFilter) return visibleDefinitions;
     return visibleDefinitions.filter((definition) => (
       activePortFilter.handleType === "source"
-        ? definition.inputs.some((port) => portTypesCompatible(activePortFilter, port))
-        : definition.outputs.some((port) => portTypesCompatible(port, activePortFilter))
+        ? definition.inputs.some((port) => portsCanConnect(withPortDataContract({ id: "filter", label: "filter", ...activePortFilter }), port))
+        : definition.outputs.some((port) => portsCanConnect(port, withPortDataContract({ id: "filter", label: "filter", ...activePortFilter })))
     ));
   }, [activePortFilter, visibleDefinitions]);
   const searchableDefinitions = useMemo(() => compatibleDefinitions.filter((item) => (
@@ -6194,6 +6297,16 @@ function WorkflowApp() {
                       <span>{selectedNode.data.storedFiles?.length} file đã lưu sẽ được dùng lại ở lượt chạy tiếp theo.</span>
                     </div>
                     <button type="button" onClick={resetStoredFile}>Reset stored file</button>
+                  </div>
+                )}
+                {selectedNode.data.run && (
+                  <div className={`run-contract-summary ${selectedNode.data.run.status}`}>
+                    <strong>Lần chạy: {selectedNode.data.run.status}</strong>
+                    <span>{selectedNode.data.run.inputs.length} Artifact đầu vào · {selectedNode.data.run.outputs.length} Artifact đầu ra</span>
+                    {selectedNode.data.artifacts?.length ? (
+                      <small>{selectedNode.data.artifacts.map((artifact) => `${artifact.name} (${artifact.type})`).join(", ")}</small>
+                    ) : null}
+                    {selectedNode.data.run.diagnostics.at(-1) && <small className="run-contract-error">{selectedNode.data.run.diagnostics.at(-1)?.message}</small>}
                   </div>
                 )}
                 {(selectedNode.data.status === "running" || selectedNode.data.status === "queued") && selectedNode.data.progress ? (

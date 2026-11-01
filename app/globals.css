@@ -441,6 +441,13 @@ button { color: inherit; }
 .stored-file-state span { color: #8fa89f; font-size: 8px; line-height: 1.35; }
 .stored-file-state button { flex: none; border: 1px solid #587287; border-radius: 6px; padding: 6px 8px; background: #182a37; color: #d7e9f5; font-size: 8px; font-weight: 700; cursor: pointer; }
 .stored-file-state button:hover { border-color: #82a2b9; background: #213c4e; }
+.run-contract-summary { display: grid; gap: 3px; margin: 0 0 10px; padding: 8px 9px; border: 1px solid #3d5470; border-radius: 8px; background: rgba(22, 38, 56, .58); }
+.run-contract-summary strong { color: #d7e7f7; font-size: 9px; text-transform: uppercase; letter-spacing: .35px; }
+.run-contract-summary span, .run-contract-summary small { color: #93a9c2; font-size: 8px; line-height: 1.4; }
+.run-contract-summary.success { border-color: #356d5d; }
+.run-contract-summary.failed { border-color: #8c3b4d; }
+.run-contract-summary.cancelled { border-color: #705c32; }
+.run-contract-summary .run-contract-error { color: #ff9aaa; }
 .output-status.success { color: var(--green); }
 .output-status.running { color: #b6a5ff; }
 .output-status.error { color: #ef6a80; }

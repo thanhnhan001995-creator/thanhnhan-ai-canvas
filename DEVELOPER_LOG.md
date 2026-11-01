@@ -1784,6 +1784,15 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm test` — build thành công, **58/58** bài kiểm tra đạt.
 
+## 2026-11-01 +07:00 — DAT-01 đến DAT-04: Hợp đồng dữ liệu và runtime Artifact
+
+- Thêm `app/data-contracts.ts` làm nguồn chuẩn v1 cho `ArtifactType`, `PortSpec`, `Artifact`, provenance, `NodeRunRecord` và `NodeDiagnostic`. Các kiểu `ImageSet`, `FrameIndex`, `TimedTranscript`, `StoredFiles`, `Report` và profile AI được phân biệt thay vì suy đoán từ JSON/đường dẫn.
+- Mỗi cổng mới và cổng gateway workflow nay suy ra kiểu Artifact cùng cardinality `một`/`nhiều`. Canvas từ chối line có số lượng không phù hợp; cổng `nhiều` có thể nhận nhiều nguồn và runtime gộp đúng payload cho executor.
+- Runtime workflow tạo Artifact có ID, type, name, metadata và provenance theo workflow/node/cổng/run. Trong giai đoạn chuyển đổi, executor cũ nhận payload đã unbox để workflow `.tess` cũ tiếp tục chạy; Properties hiển thị số Artifact input/output và chẩn đoán của lần chạy gần nhất.
+- Trạng thái chạy chuẩn hóa thành queued/running/success/failed/cancelled. Khi lỗi, node giữ Diagnostic có mã, thông điệp và gợi ý chạy lại; khi dừng, các node đang chờ/chạy được đánh dấu cancelled.
+
+**Kiểm tra:** `npm test` — build thành công, **59/59** bài kiểm tra đạt. Regression mới xác nhận `Image[]` là `ImageSet`, cardinality, provenance, unwrap payload cũ và Diagnostic.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 

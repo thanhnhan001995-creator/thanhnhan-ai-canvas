@@ -10,6 +10,7 @@ const { displayPortLabel, getPortVisual } = await import("../../app/port-library
 const { currentOpenAiModel, getAiModelCapabilities, openAiImageDetail, openAiResponseVerbosity, replacementForRetiredOpenAiModel, supportsOpenAiReasoning } = await import("../../app/ai-model-capabilities.ts");
 const { localAiModelIds, mergeScannedOllamaModel, normalizeLocalAiRegistry, removeLocalAiModel } = await import("../../app/local-ai-registry.ts");
 const { nextNodeName } = await import("../../app/node-identity.ts");
+const { artifactOutputsForPorts, artifactSummary, artifactTypeForPortType, cardinalityForPortType, executionDiagnostic, finishNodeRun, isArtifact, portCardinalityCompatible, portSpecFor, startNodeRun, unwrapArtifact } = await import("../../app/data-contracts.ts");
 
 function workflowNode(label, inputTypes, outputTypes, config = {}) {
   return {
@@ -37,6 +38,38 @@ test("local Ollama registry keeps only user-added models and never removes the i
   assert.deepEqual(localAiModelIds(removeLocalAiModel(added, "qwen3:4b")), ["qwen3-vl:2b-instruct"]);
   assert.equal(getAiModelCapabilities("Ollama", "qwen3:4b").text, "supported");
   assert.equal(getAiModelCapabilities("Ollama", "embeddinggemma:latest").text, "unsupported");
+});
+
+test("artifact contracts preserve data type, cardinality, provenance, and legacy payload access", () => {
+  assert.equal(artifactTypeForPortType("Image[]"), "ImageSet");
+  assert.equal(artifactTypeForPortType("FrameIndex"), "FrameIndex");
+  assert.equal(artifactTypeForPortType("TimedTranscript"), "TimedTranscript");
+  assert.equal(cardinalityForPortType("Image[]"), "many");
+  assert.equal(cardinalityForPortType("ImageSearchList"), "many");
+  assert.equal(cardinalityForPortType("Audio"), "one");
+
+  const imagesPort = portSpecFor({ id: "output-images", label: "image[]", type: "Image[]" });
+  const singleImagePort = portSpecFor({ id: "input-image", label: "image", type: "Image" });
+  assert.equal(portCardinalityCompatible(imagesPort, singleImagePort), false);
+  assert.equal(portCardinalityCompatible(singleImagePort, imagesPort), true);
+
+  const payload = [{ name: "frame-0001.jpg", localPath: "C:/tmp/frame-0001.jpg", type: "image/jpeg" }];
+  const outputs = artifactOutputsForPorts({ "output-images": payload }, [imagesPort], {
+    workflowId: "workflow-1",
+    nodeId: "node-prepare",
+    runId: "run-1",
+  });
+  assert.ok(isArtifact(outputs["output-images"]));
+  assert.equal(outputs["output-images"].type, "ImageSet");
+  assert.equal(outputs["output-images"].provenance.portId, "output-images");
+  assert.deepEqual(unwrapArtifact(outputs["output-images"]), payload);
+  assert.equal(artifactSummary(outputs["output-images"]).location, undefined);
+
+  const running = startNodeRun({ runId: "run-1", nodeId: "node-prepare", status: "running", inputs: [artifactSummary(outputs["output-images"])] });
+  const failed = finishNodeRun(running, "failed", { diagnostic: executionDiagnostic(new Error("Thiếu ảnh mẫu")) });
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.diagnostics[0].code, "execution_failed");
+  assert.match(failed.diagnostics[0].message, /Thiếu ảnh mẫu/);
 });
 
 test("basic catalog covers valid primitive nodes without replacing the advanced catalog", () => {
