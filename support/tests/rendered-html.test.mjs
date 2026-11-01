@@ -467,8 +467,11 @@ test("runs FFmpeg in the companion Node media service", async () => {
   assert.match(client, /Không có dữ liệu mới \+ còn Stored file/);
   assert.match(client, /const files = \[\.\.\.previousFiles, \.\.\.savedFiles\]/);
   assert.match(client, /storedFiles\?: StoredFileReference\[\]/);
+  assert.match(page, /storedArtifacts\?: ArtifactSummary\[\]/);
   assert.match(page, /function hasReusableStoredFiles/);
   assert.match(page, /Reset stored file/);
+  assert.match(page, /storedArtifacts: undefined,[\s\S]*?artifacts: undefined,[\s\S]*?run: undefined/);
+  assert.match(page, /nguồn: Artifact runtime/);
   assert.match(service, /fallback\.name \|\| "undefine"/);
   assert.match(service, /operation === "extract-audio"[\s\S]*?"-map", "0:a:0"/);
   assert.match(packageJson, /dev-with-media\.mjs/);

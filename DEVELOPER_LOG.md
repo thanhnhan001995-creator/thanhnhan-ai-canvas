@@ -1793,6 +1793,14 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm test` — build thành công, **59/59** bài kiểm tra đạt. Regression mới xác nhận `Image[]` là `ImageSet`, cardinality, provenance, unwrap payload cũ và Diagnostic.
 
+## 2026-11-01 +07:00 — DAT-05: Stored file giữ hợp đồng Artifact
+
+- Node `Lưu file` khi chạy thành công nay lưu thêm tóm tắt Artifact của tập file đang liên kết, gồm kiểu dữ liệu và provenance runtime; điều này làm rõ file đang tái sử dụng là audio, image set, frame index… thay vì chỉ là một danh sách đường dẫn.
+- `Reset stored file` giờ xóa đồng thời file liên kết, Artifact, output và lịch sử lần chạy của node, đưa node về đúng trạng thái node lưu mới.
+- Inspector hiển thị kiểu Artifact đang được tái sử dụng và nguồn runtime, trong khi hành vi có sẵn vẫn được giữ: không có input mới thì dùng stored file như node nguồn; có input mới thì lưu thêm vào tập stored file.
+
+**Kiểm tra:** `npm test` — build thành công, **59/59** bài kiểm tra đạt. Bổ sung regression tĩnh cho metadata Artifact của Stored file và thao tác reset.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 

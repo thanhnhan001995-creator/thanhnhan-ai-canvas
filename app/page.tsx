@@ -472,6 +472,8 @@ interface ContentNodeData extends Record<string, unknown> {
   calledWorkflow?: CalledWorkflowReference;
   /** File đã được node Lưu file ghi thành công và có thể tái sử dụng. */
   storedFiles?: StoredFileReference[];
+  /** Hợp đồng Artifact của lô stored file gần nhất, giữ type và provenance. */
+  storedArtifacts?: ArtifactSummary[];
   validationError?: string;
   /** Ba mức mới; viewerExpanded giữ lại để khôi phục workflow cũ. */
   viewerSize?: CanvasViewerSize;
@@ -4911,6 +4913,9 @@ function WorkflowApp() {
       data: {
         ...node.data,
         storedFiles: undefined,
+        storedArtifacts: undefined,
+        artifacts: undefined,
+        run: undefined,
         output: undefined,
         duration: undefined,
         progress: undefined,
@@ -5251,11 +5256,13 @@ function WorkflowApp() {
           setNodes((current) => current.map((item) => {
             if (item.id !== node.id) return item;
             const storedFiles = isFileStorageNode(item) ? storedFileReferencesFromOutput(output) : [];
+            const storedArtifacts = isFileStorageNode(item) ? Object.values(outputArtifacts).map(artifactSummary) : [];
             return {
               ...item,
               data: {
                 ...item.data,
                 ...(storedFiles.length ? { storedFiles } : {}),
+                ...(storedArtifacts.length ? { storedArtifacts } : {}),
                 status: "success",
                 beacon: "ready",
                 output,
@@ -6295,6 +6302,7 @@ function WorkflowApp() {
                     <div>
                       <strong>Stored file đang liên kết</strong>
                       <span>{selectedNode.data.storedFiles?.length} file đã lưu sẽ được dùng lại ở lượt chạy tiếp theo.</span>
+                      {selectedNode.data.storedArtifacts?.length ? <span>{selectedNode.data.storedArtifacts.map((artifact) => artifact.type).join(", ")} · nguồn: Artifact runtime</span> : null}
                     </div>
                     <button type="button" onClick={resetStoredFile}>Reset stored file</button>
                   </div>
