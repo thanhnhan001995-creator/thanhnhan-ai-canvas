@@ -1,8 +1,14 @@
 export const TESS_EXTENSION = ".tess";
 export const TESS_MAGIC = "TESSERACT/1";
 export const TESS_FORMAT = "tesseract-workflow";
-export const TESS_DOCUMENT_VERSION = 2;
+export const TESS_DOCUMENT_VERSION = 3;
 export const TESS_INTERFACE_VERSION = 1;
+export const TESS_DATA_CONTRACT_VERSION = 1;
+const ARTIFACT_TYPES = new Set([
+  "Any", "Text", "Boolean", "Number", "Record", "File", "Folder",
+  "Image", "ImageSet", "Audio", "Video", "FrameIndex", "TimedTranscript",
+  "Table", "Report", "StoredFiles", "AIExecutionProfile", "CachedData",
+]);
 
 function text(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -29,11 +35,15 @@ function normalizeInterfacePort(value, direction, index) {
   if (!name) throw new Error(`Cổng ${direction} “${id}” thiếu tên hiển thị.`);
   if (!type) throw new Error(`Cổng ${direction} “${id}” thiếu kiểu dữ liệu.`);
   const description = text(port.description);
+  const artifactType = text(port.artifactType);
+  const cardinality = port.cardinality === "one" || port.cardinality === "many" ? port.cardinality : "";
   return {
     id,
     name,
     type,
     required: port.required === true,
+    ...(ARTIFACT_TYPES.has(artifactType) ? { artifactType } : {}),
+    ...(cardinality ? { cardinality } : {}),
     ...(description ? { description } : {}),
   };
 }
@@ -82,6 +92,32 @@ export function validateWorkflowInterface(value) {
   }
 }
 
+/** Dấu vân tay lưu cùng caller để phát hiện workflow con đổi interface. */
+export function workflowInterfaceFingerprint(value) {
+  return JSON.stringify(normalizeWorkflowInterface(value));
+}
+
+/** Thông báo ngắn, chỉ rõ cổng nào thay đổi thay vì lỗi JSON chung chung. */
+export function describeWorkflowInterfaceChange(expected, actual) {
+  const left = normalizeWorkflowInterface(expected);
+  const right = normalizeWorkflowInterface(actual);
+  const changes = [];
+  for (const direction of ["inputs", "outputs"]) {
+    const label = direction === "inputs" ? "đầu vào" : "đầu ra";
+    const before = new Map(left[direction].map((port) => [port.id, port]));
+    const after = new Map(right[direction].map((port) => [port.id, port]));
+    for (const [id, port] of before) {
+      const replacement = after.get(id);
+      if (!replacement) changes.push(`mất cổng ${label} “${port.name}”`);
+      else if (JSON.stringify(port) !== JSON.stringify(replacement)) changes.push(`đổi hợp đồng cổng ${label} “${port.name}”`);
+    }
+    for (const [id, port] of after) {
+      if (!before.has(id)) changes.push(`thêm cổng ${label} “${port.name}”`);
+    }
+  }
+  return changes.length ? changes.join("; ") : "metadata interface thay đổi";
+}
+
 export function prepareWorkflowForSave(workflow) {
   if (!workflow || typeof workflow !== "object" || Array.isArray(workflow)) {
     throw new Error("Workflow cần lưu không hợp lệ.");
@@ -90,6 +126,9 @@ export function prepareWorkflowForSave(workflow) {
   return {
     ...workflow,
     workflowId,
+    // Dữ liệu workflow cũ vẫn được page adapter nâng cấp lúc mở; mọi lần lưu
+    // mới ghi rõ version hợp đồng để bản app cũ không hiểu nhầm dữ liệu typed.
+    dataContractVersion: TESS_DATA_CONTRACT_VERSION,
     workflowInterface: normalizeWorkflowInterface(workflow.workflowInterface),
   };
 }
@@ -122,6 +161,7 @@ export function serializeTessWorkflow(workflow) {
   return `${TESS_MAGIC}\n${JSON.stringify({
     format: TESS_FORMAT,
     version: TESS_DOCUMENT_VERSION,
+    dataContractVersion: TESS_DATA_CONTRACT_VERSION,
     workflowId: persistedWorkflow.workflowId,
     workflowInterface: persistedWorkflow.workflowInterface,
     workflow: persistedWorkflow,
@@ -136,7 +176,16 @@ export function parseWorkflowDocument(source) {
     if (!envelope || envelope.format !== TESS_FORMAT || !envelope.workflow || typeof envelope.workflow !== "object") {
       throw new Error("Tệp .tess không đúng định dạng Tesseract.");
     }
-    if (envelope.version === undefined || envelope.version < TESS_DOCUMENT_VERSION) return envelope.workflow;
+    const envelopeVersion = Number(envelope.version ?? 1);
+    if (!Number.isInteger(envelopeVersion) || envelopeVersion < 1) throw new Error("Tệp .tess có phiên bản tài liệu không hợp lệ.");
+    if (envelopeVersion > TESS_DOCUMENT_VERSION) {
+      throw new Error(`Tệp .tess dùng phiên bản ${envelopeVersion} mới hơn Tesseract hiện tại (${TESS_DOCUMENT_VERSION}). Hãy cập nhật app rồi mở lại.`);
+    }
+    const dataContractVersion = Number(envelope.dataContractVersion ?? envelope.workflow.dataContractVersion ?? 0);
+    if (!Number.isInteger(dataContractVersion) || dataContractVersion < 0) throw new Error("Tệp .tess có phiên bản hợp đồng dữ liệu không hợp lệ.");
+    if (dataContractVersion > TESS_DATA_CONTRACT_VERSION) {
+      throw new Error(`Tệp .tess dùng hợp đồng dữ liệu v${dataContractVersion} mới hơn app hỗ trợ (v${TESS_DATA_CONTRACT_VERSION}). Hãy cập nhật app rồi mở lại.`);
+    }
     const workflowId = text(envelope.workflow.workflowId) || text(envelope.workflowId);
     if (!workflowId) throw new Error("Tệp .tess thiếu ID workflow ổn định.");
     const embeddedInterface = normalizeWorkflowInterface(envelope.workflow.workflowInterface ?? envelope.workflowInterface);
@@ -144,7 +193,14 @@ export function parseWorkflowDocument(source) {
     if (JSON.stringify(embeddedInterface) !== JSON.stringify(declaredInterface)) {
       throw new Error("Metadata interface của tệp .tess không khớp workflow bên trong.");
     }
-    return { ...envelope.workflow, workflowId, workflowInterface: embeddedInterface };
+    return {
+      ...envelope.workflow,
+      workflowId,
+      // V0/v1/v2 không khai báo hợp đồng typed: adapter page sẽ suy ra từ port
+      // type; một lần lưu kế tiếp sẽ ghi v1 minh bạch.
+      dataContractVersion: dataContractVersion || TESS_DATA_CONTRACT_VERSION,
+      workflowInterface: embeddedInterface,
+    };
   }
   // Giữ khả năng mở workflow JSON cũ; lần lưu tiếp theo sẽ chuyển sang .tess.
   return JSON.parse(sourceText);

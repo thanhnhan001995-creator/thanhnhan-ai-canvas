@@ -36,7 +36,7 @@ import { currentOpenAiModel, getAiModelCapabilities, replacementForRetiredOpenAi
 import { LOCAL_AI_REGISTRY_STORAGE_KEY, localAiModelIds, mergeScannedOllamaModel, normalizeLocalAiRegistry, removeLocalAiModel, type LocalAiModel, type ScannedOllamaModel } from "./local-ai-registry";
 import { nextNodeName, nodeFamilyOf } from "./node-identity";
 import { ARTIFACT_TYPES, artifactOutputsForPorts, artifactSummary, executionDiagnostic, finishNodeRun, portCardinalityCompatible, portSpecFor, startNodeRun, unwrapArtifact, type Artifact, type ArtifactOutputMap, type ArtifactSummary, type ArtifactType, type NodeRunRecord, type PortCardinality } from "./data-contracts";
-import { createWorkflowId, normalizeWorkflowInterface, parseWorkflowDocument, prepareWorkflowForSave, serializeTessWorkflow, workflowNameFromPath } from "../shared/tess-document.mjs";
+import { createWorkflowId, describeWorkflowInterfaceChange, normalizeWorkflowInterface, parseWorkflowDocument, prepareWorkflowForSave, serializeTessWorkflow, workflowInterfaceFingerprint, workflowNameFromPath } from "../shared/tess-document.mjs";
 import { findWorkflowReferenceCycles } from "../shared/workflow-recursion.mjs";
 
 declare global {
@@ -515,6 +515,8 @@ type CalledWorkflowReference = {
   path: string;
   workflowId: string;
   workflowInterface: WorkflowInterfaceShape;
+  /** Dấu vân tay interface lúc caller đồng bộ cổng lần gần nhất. */
+  interfaceFingerprint?: string;
   tabId?: string;
   /** Bản .tess đã đọc qua input web, để chạy thử không cần Tesseract Desktop. */
   embeddedWorkflow?: WorkflowDocumentLike;
@@ -4543,7 +4545,7 @@ function WorkflowApp() {
       const workflow = result.workflow as { workflowId?: unknown; workflowInterface?: unknown };
       if (typeof workflow.workflowId !== "string" || !workflow.workflowId.trim()) throw new Error("Workflow cần gọi chưa có ID ổn định. Hãy mở và lưu lại workflow đó bằng Tesseract.");
       const workflowInterface = normalizeWorkflowInterfaceShape(workflow.workflowInterface);
-      const reference: CalledWorkflowReference = { source: "file", path: result.path, workflowId: workflow.workflowId, workflowInterface };
+      const reference: CalledWorkflowReference = { source: "file", path: result.path, workflowId: workflow.workflowId, workflowInterface, interfaceFingerprint: workflowInterfaceFingerprint(workflowInterface) };
       const callPorts = portsForCalledWorkflow(workflowInterface);
       rememberCanvasChange();
       setEdges((current) => current.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
@@ -4586,6 +4588,7 @@ function WorkflowApp() {
         path: browserPath,
         workflowId: workflow.workflowId,
         workflowInterface,
+        interfaceFingerprint: workflowInterfaceFingerprint(workflowInterface),
         embeddedWorkflow: workflow,
       };
       const callPorts = portsForCalledWorkflow(workflowInterface);
@@ -4626,6 +4629,7 @@ function WorkflowApp() {
       path: `current://${workflowId}`,
       workflowId,
       workflowInterface,
+      interfaceFingerprint: workflowInterfaceFingerprint(workflowInterface),
     };
     const callPorts = portsForCalledWorkflow(workflowInterface);
     rememberCanvasChange();
@@ -4671,6 +4675,7 @@ function WorkflowApp() {
       tabId: target.id,
       workflowId: target.workflowId,
       workflowInterface,
+      interfaceFingerprint: workflowInterfaceFingerprint(workflowInterface),
     };
     const callPorts = portsForCalledWorkflow(workflowInterface);
     rememberCanvasChange();
@@ -4744,8 +4749,11 @@ function WorkflowApp() {
       }
       const expectedInterface = extended.data.calledWorkflow?.workflowInterface;
       const actualInterface = normalizeWorkflowInterfaceShape(document.workflowInterface);
-      if (expectedInterface && JSON.stringify(expectedInterface) !== JSON.stringify(actualInterface)) {
-        throw new Error(`Workflow “${workflowNameFromPath(configuredPath)}” đã đổi interface. Hãy chọn lại file tại node Gọi workflow để đồng bộ cổng.`);
+      const expectedFingerprint = extended.data.calledWorkflow?.interfaceFingerprint ?? (expectedInterface ? workflowInterfaceFingerprint(expectedInterface) : "");
+      const actualFingerprint = workflowInterfaceFingerprint(actualInterface);
+      if (expectedInterface && expectedFingerprint !== actualFingerprint) {
+        const change = describeWorkflowInterfaceChange(expectedInterface, actualInterface);
+        throw new Error(`Workflow “${workflowNameFromPath(configuredPath)}” đã đổi interface (${change}). Hãy chọn lại hoặc bấm Đồng bộ workflow đã chọn tại node Gọi workflow để xác nhận và đồng bộ cổng.`);
       }
       context.calls += 1;
       context.stack.push(loaded.path);

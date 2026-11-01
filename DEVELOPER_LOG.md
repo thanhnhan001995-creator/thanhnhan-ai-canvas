@@ -1809,6 +1809,22 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm test` — build thành công, **61/61** bài kiểm tra đạt. Regression xác nhận profile Ollama/API không chứa API key, giữ `secretRef`, và Report luôn truy được TaskSpec/bằng chứng.
 
+## 2026-11-01 +07:00 — DAT-07: Interface workflow gọi lại có hợp đồng typed
+
+- `.tess` nay giữ lại `artifactType` và cardinality `một`/`nhiều` cho từng cổng của Cổng vào/Cổng ra. Workflow cũ không có hai trường này vẫn được adapter suy ra từ `type` như trước.
+- Node `Gọi workflow` lưu dấu vân tay interface tại thời điểm đồng bộ. Lúc chạy, app đối chiếu dấu vân tay thay vì chỉ so JSON mơ hồ; nếu workflow con thay đổi, lỗi nêu cụ thể cổng vào/ra nào bị thêm, mất hoặc đổi hợp đồng và yêu cầu người dùng bấm Đồng bộ để xác nhận.
+- Giữ toàn bộ giới hạn an toàn đã có: chặn đệ quy trực tiếp/lồng vòng, sâu tối đa 32, tổng lời gọi tối đa 500. Không tự đồng bộ hoặc tự thay dây của caller khi interface workflow con đổi.
+
+**Kiểm tra:** `npm test` — build thành công, **62/62** bài kiểm tra đạt. Regression mới xác nhận .tess giữ typed port, nhận ra lỗi thay đổi hợp đồng, cùng các test vòng đệ quy đã có.
+
+## 2026-11-01 +07:00 — DAT-08: Version và tương thích workflow .tess
+
+- Nâng version tài liệu `.tess` lên 3, thêm `dataContractVersion: 1` vào envelope và workflow khi lưu. Phiên bản này thể hiện rõ hợp đồng Artifact/PortSpec được ghi trong file, không biến dữ liệu lớn thành JSON nhúng.
+- Adapter tiếp tục đọc các file `.tess` v1/v2 và workflow JSON cũ. File mới hơn version Tesseract hoặc hợp đồng dữ liệu app hỗ trợ sẽ dừng với thông báo cần cập nhật app, thay vì mở sai dữ liệu.
+- Hoàn tất regression cho lưu/đọc `.tess`, cổng typed, thay đổi interface caller, đệ quy, stored file, AI local/API và schema cũ. Không đóng gói, không push, không thay bản cài chính thức.
+
+**Kiểm tra:** `npm test` — build thành công, **63/63** bài kiểm tra đạt. Có test mới cho migration `.tess` v2 và chặn file mới hơn app.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 
