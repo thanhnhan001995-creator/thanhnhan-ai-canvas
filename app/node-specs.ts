@@ -1314,6 +1314,14 @@ export const NODE_SPECS: NodeSpec[] = [
   },
   {
     "group": "Kiểm tra chất lượng",
+    "order": 2.5,
+    "name": "Kiểm tra bằng AI",
+    "settings": "Mục tiêu, checklist, mức nghiêm ngặt; nhận AIExecutionProfile từ AIModel",
+    "input": "Dữ liệu, AIModel, CachedData",
+    "output": "QAReport, Report, CachedData"
+  },
+  {
+    "group": "Kiểm tra chất lượng",
     "order": 4,
     "name": "Tổng hợp báo cáo kiểm tra",
     "settings": "Ngưỡng đạt, cách gộp lỗi",

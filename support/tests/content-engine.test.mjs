@@ -123,14 +123,15 @@ test("AI setup node emits a reusable profile without exposing its API key", asyn
 
 test("basic catalog covers valid primitive nodes without replacing the advanced catalog", () => {
   const primitiveNames = new Set(NODE_SPECS.map((spec) => spec.name));
-  assert.equal(BASIC_NODE_PRESETS.length, 61);
-  assert.equal(new Set(BASIC_NODE_PRESETS.map((preset) => preset.id)).size, 61);
+  assert.equal(BASIC_NODE_PRESETS.length, 62);
+  assert.equal(new Set(BASIC_NODE_PRESETS.map((preset) => preset.id)).size, 62);
   for (const preset of BASIC_NODE_PRESETS) {
     assert.ok(preset.nodes.length > 0, `${preset.label} has no steps`);
     for (const label of preset.nodes) assert.ok(primitiveNames.has(label), `${preset.label} references missing node ${label}`);
   }
-  assert.equal(NODE_SPECS.length, 240);
+  assert.equal(NODE_SPECS.length, 241);
   assert.deepEqual(BASIC_NODE_PRESETS.find((preset) => preset.id === "ai-task")?.nodes, ["Thực thi tác vụ AI"]);
+  assert.deepEqual(BASIC_NODE_PRESETS.find((preset) => preset.id === "ai-check")?.nodes, ["Kiểm tra bằng AI"]);
   assert.equal(NODE_SPECS.find((spec) => spec.name === "Thực thi tác vụ AI")?.output, "AIResult, Report, CachedData");
   assert.equal(BASIC_NODE_PRESETS.find((preset) => preset.id === "ai-media")?.label, "Phân tích media bằng AI");
   assert.deepEqual(BASIC_NODE_PRESETS.find((preset) => preset.id === "ai-media")?.nodes, ["Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"]);
@@ -309,6 +310,49 @@ test("generic AI task requires a connected profile and returns result, task spec
     assert.equal(result["output-1"].report.kind, "tesseract-ai-report");
     assert.equal(result["output-2"].task.goal, "Trích xuất: Trích xuất dữ kiện có căn cứ.");
     assert.equal(result["output-3"].itemCount, 3);
+    await assert.rejects(
+      () => executeWorkflowNode(node, { "input-2": "Không có profile" }, new Map()),
+      /cần nối cổng AIModel/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("AI checker returns a repairable verdict with evidence from its connected profile", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    assert.equal(url, "/api/research");
+    const body = JSON.parse(String(init.body));
+    assert.equal(body.action, "ai");
+    assert.equal(body.json, true);
+    assert.match(body.prompt, /CHECKLIST/);
+    assert.match(body.prompt, /Không bịa dữ kiện/);
+    return Response.json({
+      result: {
+        status: "Cần sửa",
+        summary: "Có một dữ kiện không có nguồn.",
+        evidence: [{ location: "Đoạn 2", detail: "Không thấy nguồn dẫn" }],
+        issues: [{ severity: "warning", location: "Đoạn 2", reason: "Khẳng định chưa có bằng chứng.", fix: "Bổ sung nguồn hoặc bỏ khẳng định." }],
+      },
+      usage: { inputTokens: 60, outputTokens: 20 },
+    });
+  };
+  try {
+    const node = workflowNode(
+      "Kiểm tra bằng AI",
+      ["AIModel", "Dữ liệu", "CachedData"],
+      ["QAReport", "Report", "CachedData"],
+      { checkGoal: "Kiểm tra tính chính xác", checklist: "Không bịa dữ kiện", strictness: "Nghiêm ngặt" },
+    );
+    const result = await executeWorkflowNode(node, {
+      "input-1": { provider: "OpenAI", model: "gpt-5.6-luna", apiKey: "test-api-key", maxInputTokens: 40000, maxOutputWorkflowTokens: 20000 },
+      "input-2": "Bài viết có một khẳng định cần đối chiếu.",
+    }, new Map());
+    assert.equal(result["output-1"].verdict, "Cần sửa");
+    assert.equal(result["output-1"].repairItems[0].location, "Đoạn 2");
+    assert.equal(result["output-2"].needsFix, true);
+    assert.equal(result["output-2"].task.expectedOutput, "Report");
     await assert.rejects(
       () => executeWorkflowNode(node, { "input-2": "Không có profile" }, new Map()),
       /cần nối cổng AIModel/,

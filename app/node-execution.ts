@@ -5,7 +5,7 @@ const EXECUTABLE_LABELS = new Set([
   "Chọn nhà cung cấp AI", "Chọn mô hình AI", "Lựa chọn model AI", "Cache kết quả",
   "Soạn system prompt", "Tạo prompt từ dữ liệu",
   "Gọi AI tạo văn bản", "Gọi AI trả JSON", "Thực thi tác vụ AI", "Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI",
-  "Chấm điểm đầu ra AI", "Duyệt đầu ra AI",
+  "Chấm điểm đầu ra AI", "Duyệt đầu ra AI", "Kiểm tra bằng AI",
   "Tạo ý tưởng", "Chấm điểm ý tưởng", "Xác định đối tượng xem", "Tạo góc tiếp cận", "Tạo dàn ý", "Viết nội dung",
   "Viết lại nội dung", "Mở rộng nội dung", "Rút gọn nội dung", "Thay đổi giọng văn", "Kiểm tra nội dung", "Kiểm tra nội dung trùng lặp", "Kiểm tra chính sách", "Duyệt nội dung thủ công",
   "Tìm kiếm Internet", "Đọc trang web", "Đọc tài liệu", "Tổng hợp các nguồn", "Trích xuất dữ kiện", "Kiểm tra dữ kiện", "So sánh các nguồn", "Xếp hạng độ tin cậy nguồn", "Duyệt nguồn thủ công",

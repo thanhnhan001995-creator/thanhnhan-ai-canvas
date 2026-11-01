@@ -1855,6 +1855,16 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm.cmd test` — build thành công, **71/71** bài kiểm tra đạt. Regression mô phỏng lời gọi AI xác nhận profile bắt buộc, request dùng profile nối dây, và ba output gồm kết quả/TaskSpec, Report, cache đều đúng.
 
+## 2026-11-01 +07:00 — AIC-03: Node Kiểm tra bằng AI
+
+**Phạm vi:** Bổ sung kiểm tra chất lượng bằng AI có kết luận và hướng sửa dùng được cho vòng phản hồi.
+
+- Thêm node cơ bản **Kiểm tra bằng AI** trong nhóm Kiểm tra chất lượng. Node nhận sản phẩm qua `Dữ liệu`, profile qua `AIModel`, cùng Mục tiêu, Checklist và mức nghiêm ngặt.
+- AI bị ràng buộc trả JSON có status, evidence và issues. Runtime chuẩn hóa thành `Đạt`, `Cần sửa` hoặc `Không đạt`, đồng thời tạo `repairItems` gồm vị trí, lý do và cách sửa.
+- Output có `QAReport`, `Report` chuẩn chứa TaskSpec và `CachedData`. Cổng AIModel bắt buộc; node cũ Chấm điểm/Duyệt đầu ra AI vẫn là kiểm tra quy tắc tương thích, không bị gọi nhầm là AI check.
+
+**Kiểm tra:** `npm.cmd test` — build thành công, **72/72** bài kiểm tra đạt. Regression mô phỏng AI trả cảnh báo có bằng chứng, xác nhận verdict Cần sửa, repair item, Report và profile bắt buộc.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 

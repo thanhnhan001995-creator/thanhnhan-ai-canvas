@@ -2662,6 +2662,85 @@ async function executeAiTaskNode(node: WorkflowNodeLike, inputs: Record<string, 
   });
 }
 
+function aiCheckVerdict(value: unknown, issues: QualityIssue[]): "Đạt" | "Cần sửa" | "Không đạt" {
+  const candidate = String(value ?? "").trim().toLocaleLowerCase("vi");
+  if (candidate === "đạt" || candidate === "pass" || candidate === "passed") return "Đạt";
+  if (candidate === "cần sửa" || candidate === "needs fix" || candidate === "needs-fix") return "Cần sửa";
+  if (candidate === "không đạt" || candidate === "fail" || candidate === "failed") return "Không đạt";
+  if (issues.some((issue) => issue.severity === "error")) return "Không đạt";
+  if (issues.some((issue) => issue.severity === "warning")) return "Cần sửa";
+  return "Đạt";
+}
+
+async function executeAiCheckNode(node: WorkflowNodeLike, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const config = node.data.config ?? {};
+  const settings = aiCallSettings({ ...node, data: { ...node.data, label: "Thực thi tác vụ AI" } }, inputs);
+  if (!settings.provider || !settings.model || (settings.provider !== "Ollama" && !settings.apiKey)) {
+    throw new Error("Kiểm tra bằng AI cần nối cổng AIModel từ node Thiết lập AI có provider, model và API key hợp lệ (Ollama không cần API key).");
+  }
+  if (!["OpenAI", "Ollama"].includes(settings.provider)) throw new Error(`Kiểm tra bằng AI hiện hỗ trợ OpenAI và Ollama; profile đang chọn ${settings.provider}.`);
+  const goal = String(config.checkGoal ?? "").trim();
+  if (!goal) throw new Error("Kiểm tra bằng AI cần Mục tiêu kiểm tra.");
+  const materials = preferredAiMaterials(node, inputs);
+  const product = taskInputText(node, inputs, materials);
+  if (product === "(Chưa có dữ liệu đầu vào)") throw new Error("Kiểm tra bằng AI cần nối Dữ liệu cần kiểm tra.");
+  const checklist = lines(config.checklist);
+  const strictness = String(config.strictness ?? "Cân bằng");
+  const task = taskSpec({
+    nodeId: node.id,
+    goal,
+    expectedOutput: "Report",
+    inputTypes: node.data.inputs
+      .filter((port) => !/^(AIModel|AIProvider|APIKey|CachedData)$/i.test(port.type))
+      .map((port) => artifactTypeForPortType(port.type)),
+    instructions: checklist.join("\n"),
+    successCriteria: checklist.length ? checklist : ["Nêu verdict rõ ràng.", "Mỗi lỗi cần có lý do, bằng chứng và cách sửa."],
+  });
+  const prompt = [
+    `Mục tiêu kiểm tra: ${goal}`,
+    `Mức nghiêm ngặt: ${strictness}.`,
+    checklist.length ? `CHECKLIST:\n${checklist.map((item, index) => `${index + 1}. ${item}`).join("\n")}` : "Không có checklist bổ sung.",
+    "Chỉ đánh giá từ sản phẩm đầu vào. Trả JSON hợp lệ: {\"status\":\"Đạt|Cần sửa|Không đạt\",\"summary\":\"\",\"evidence\":[{\"location\":\"\",\"detail\":\"\"}],\"issues\":[{\"severity\":\"warning|error\",\"location\":\"\",\"reason\":\"\",\"fix\":\"\"}]}. Không nêu lỗi nếu không có bằng chứng.",
+    `SẢN PHẨM CẦN KIỂM TRA:\n${product}`,
+  ].join("\n\n");
+  const reserve = estimatedAiInputTokens(prompt);
+  const payload = await apiJson({
+    action: "ai",
+    provider: settings.provider,
+    apiKey: settings.apiKey,
+    model: settings.model,
+    temperature: settings.temperature,
+    maxOutputTokens: aiBudget(settings, reserve),
+    system: "Bạn là kiểm định viên. Không bịa bằng chứng hoặc lỗi. Chỉ trả JSON hợp lệ.",
+    prompt,
+    json: true,
+    promptCacheKey: materials.record.cacheKey,
+  });
+  const raw = record(payload.result);
+  const issues = normalizeAiIssues(raw.issues);
+  const verdict = aiCheckVerdict(raw.status ?? raw.verdict, issues);
+  const repairItems = issues
+    .filter((issue) => issue.severity !== "info")
+    .map((issue) => ({ location: issue.location, reason: issue.reason, fix: issue.fix }));
+  const checked = {
+    ...raw,
+    status: verdict,
+    verdict,
+    passed: verdict === "Đạt",
+    needsFix: verdict !== "Đạt",
+    summary: String(raw.summary ?? "AI chưa nêu tóm tắt kiểm tra."),
+    evidence: Array.isArray(raw.evidence) ? raw.evidence : [{ kind: "checked-input", source: materials.source, characters: product.length }],
+    issues,
+    repairItems,
+  };
+  const result = withAiTaskReport(attachAiUsage(checked, payload.usage, settings, reserve), task, checked.evidence);
+  return outputs(node, {
+    QAReport: { ...result, cacheSource: materials.source },
+    Report: result.report,
+    CachedData: cacheHandle(materials.record),
+  });
+}
+
 function estimatedAiInputTokens(text: string, imageCount = 0) {
   // Dự trữ bảo thủ: văn bản tiếng Việt khoảng 3 ký tự/token và tối đa 1.000
   // token cho mỗi ảnh. API vẫn trả usage thật để sổ token hiển thị chính xác.
@@ -3469,6 +3548,7 @@ export async function executeWorkflowNode(
   if (["If/Else", "Switch"].includes(node.data.label)) return executeRoutingNode(node, inputs);
   if (["Soạn system prompt", "Tạo prompt từ dữ liệu"].includes(node.data.label)) return executeAiPromptNode(node, inputs);
   if (node.data.label === "Thực thi tác vụ AI") return executeAiTaskNode(node, inputs);
+  if (node.data.label === "Kiểm tra bằng AI") return executeAiCheckNode(node, inputs);
   if (["Gọi AI tạo văn bản", "Gọi AI trả JSON", "Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"].includes(node.data.label)) return executeAiRuntimeNode(node, inputs, store);
   if (["Chấm điểm đầu ra AI", "Duyệt đầu ra AI"].includes(node.data.label)) return executeAiReviewNode(node, inputs);
   if (node.data.label === "Xem dữ liệu trên canvas") return executeCanvasDataViewer(node, inputs);

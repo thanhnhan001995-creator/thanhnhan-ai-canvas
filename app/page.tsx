@@ -238,7 +238,7 @@ function inspectWorkflow(nodes: ContentFlowNode[], edges: Edge[]): WorkflowInspe
       && edge.targetHandle === port.id
       && !nodes.find((source) => source.id === edge.source)?.data.paused
     ));
-    const cacheAwareAiNode = new Set(["Lựa chọn model AI", "Gọi AI tạo văn bản", "Gọi AI trả JSON", "Thực thi tác vụ AI", "Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI", "Phân tích từng đoạn video", "Tổng hợp nội dung video", "Chọn highlight bằng AI", "Làm rõ highlight lặp", "Tạo tiêu đề", "Chọn ảnh thumbnail bằng AI", "Bố cục thumbnail bằng AI"]).has(family);
+    const cacheAwareAiNode = new Set(["Lựa chọn model AI", "Gọi AI tạo văn bản", "Gọi AI trả JSON", "Thực thi tác vụ AI", "Kiểm tra bằng AI", "Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI", "Phân tích từng đoạn video", "Tổng hợp nội dung video", "Chọn highlight bằng AI", "Làm rõ highlight lặp", "Tạo tiêu đề", "Chọn ảnh thumbnail bằng AI", "Bố cục thumbnail bằng AI"]).has(family);
     const hasValidCache = cacheAwareAiNode && node.data.inputs.some((port) => port.type === "CachedData" && hasActiveInput(port));
     // Lưu file có storedfile là nguồn tái sử dụng hoàn chỉnh; chỉ node mới
     // chưa từng lưu mới phải bị báo thiếu input/folder để bắt đầu một lượt lưu.
@@ -343,11 +343,11 @@ function inspectWorkflow(nodes: ContentFlowNode[], edges: Edge[]): WorkflowInspe
     }
     beacons.set(node.id, beacon);
   }
-  const hasAiCall = nodes.some((node) => ["Gọi AI tạo văn bản", "Gọi AI trả JSON", "Thực thi tác vụ AI", "Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"].includes(nodeFamilyOf(node)));
+  const hasAiCall = nodes.some((node) => ["Gọi AI tạo văn bản", "Gọi AI trả JSON", "Thực thi tác vụ AI", "Kiểm tra bằng AI", "Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"].includes(nodeFamilyOf(node)));
   const hasKey = nodes.some((node) => String(node.data.config.apiKey ?? "").trim());
   const hasOllamaSetup = nodes.some((node) => ["Thiết lập AI", "Chọn nhà cung cấp AI"].includes(nodeFamilyOf(node)) && String(node.data.config.provider ?? "") === "Ollama");
   if (hasAiCall && !hasKey && !hasOllamaSetup) {
-    const firstAi = nodes.find((node) => ["Gọi AI tạo văn bản", "Gọi AI trả JSON", "Thực thi tác vụ AI", "Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"].includes(nodeFamilyOf(node)));
+    const firstAi = nodes.find((node) => ["Gọi AI tạo văn bản", "Gọi AI trả JSON", "Thực thi tác vụ AI", "Kiểm tra bằng AI", "Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"].includes(nodeFamilyOf(node)));
     if (firstAi) {
       issues.push({ nodeId: firstAi.id, beacon: "error", message: "Workflow chưa có API key. Nhập trực tiếp trong Thiết lập AI hoặc nối Cấu hình API key vào cổng APIKey." });
       beacons.set(firstAi.id, "error");
@@ -984,6 +984,7 @@ const OPTIONAL_INPUT_TYPES: Record<string, string[]> = {
   "Gọi AI tạo văn bản": ["CachedData"],
   "Gọi AI trả JSON": ["CachedData"],
   "Thực thi tác vụ AI": ["Dữ liệu", "Prompt", "SystemPrompt", "CachedData"],
+  "Kiểm tra bằng AI": ["CachedData"],
   "Phân tích hình ảnh bằng AI": ["CachedData", "AttentionRegion"],
   "Phân tích âm thanh bằng AI": ["CachedData"],
   "Phân tích video bằng AI": ["CachedData", "TimedTranscript"],
@@ -1226,6 +1227,11 @@ const AI_NODE_FIELDS: Record<string, ConfigField[]> = {
     { key: "instructions", label: "Chỉ dẫn tác vụ", type: "textarea", placeholder: "Mô tả kết quả cần tạo, phân loại, trích xuất hoặc phân tích...", required: true, help: "Có thể nối Prompt/SystemPrompt; phần này vẫn là chỉ dẫn chính của TaskSpec, không tự gọi AI." },
     { key: "outputFormat", label: "Định dạng kết quả", type: "select", options: ["Văn bản", "JSON"], defaultValue: "Văn bản", required: true },
     { key: "successCriteria", label: "Tiêu chí hoàn thành", type: "textarea", placeholder: "Mỗi dòng một tiêu chí. Ví dụ: chỉ dùng dữ liệu đầu vào.", help: "Không bắt buộc. Nếu trống, node dùng tiêu chí mặc định: nêu rõ bằng chứng và phần chưa đủ dữ liệu." },
+  ],
+  "Kiểm tra bằng AI": [
+    { key: "checkGoal", label: "Mục tiêu kiểm tra", type: "textarea", placeholder: "Ví dụ: kiểm tra nội dung có đúng brief và đủ các dữ kiện bắt buộc không.", required: true },
+    { key: "checklist", label: "Checklist kiểm tra", type: "textarea", placeholder: "Mỗi dòng một tiêu chí cần đạt.", help: "Để trống nếu chỉ dùng Mục tiêu kiểm tra." },
+    { key: "strictness", label: "Mức nghiêm ngặt", type: "select", options: ["Cân bằng", "Nghiêm ngặt", "Chỉ báo lỗi rõ ràng"], defaultValue: "Cân bằng" },
   ],
   "Phân tích hình ảnh bằng AI": [
     { key: "analysisGoal", label: "Mục tiêu phân tích", type: "select", options: ["Mô tả ảnh", "Trích xuất chữ", "Phát hiện đối tượng", "Đánh giá chất lượng", "Kiểm tra thương hiệu", "Khác"], defaultValue: "Mô tả ảnh" },
