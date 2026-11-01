@@ -17,7 +17,7 @@
     "desktop:debug": "electron --enable-logging .",
     "generate:icon": "node support/scripts/generate-tesseract-icon.mjs",
     "package:win": "npm run build && npm run generate:icon && electron-builder --win nsis --x64",
-    "test": "npm run build && node --test support/tests/rendered-html.test.mjs support/tests/content-engine.test.mjs support/tests/tess-document.test.mjs support/tests/workflow-call-sync.test.mjs support/tests/workflow-recursion.test.mjs support/tests/workflow-recursion-coverage.test.mjs",
+    "test": "npm run build && node --test support/tests/rendered-html.test.mjs support/tests/content-engine.test.mjs support/tests/tess-document.test.mjs support/tests/workflow-call-sync.test.mjs support/tests/workflow-recursion.test.mjs support/tests/workflow-recursion-coverage.test.mjs support/tests/ai-node-catalog.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },

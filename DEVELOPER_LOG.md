@@ -1835,6 +1835,16 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm.cmd test` — build thành công, **68/68** bài kiểm tra đạt; bao gồm hồi quy giữ line khi đồng bộ, cổng mới không buộc nối lại, line mất/đổi kiểu cần nối lại, nhận diện đường dẫn Windows và vòng đệ quy thật. Không đóng gói và không push.
 
+## 2026-11-01 +07:00 — AIC-01: Danh mục node AI v1
+
+**Phạm vi:** Rà soát thư viện node AI hiện hữu để xác định ranh giới của AI tổng quát, Media và kiểm tra theo quy tắc.
+
+- Thêm danh mục máy đọc được `shared/ai-node-catalog.mjs` cho 12 họ node AI, mô tả đúng cổng vào/ra hiện có, mục đích, quyết định chuyển đổi và đích v1.
+- Chốt bốn năng lực AI lõi: **Cấu hình AI**, **Tạo prompt**, **Thực thi tác vụ AI**, **Kiểm tra bằng AI**. Node media sẽ chuyển lối tạo sang nhóm Media; các node chấm/duyệt heuristic chỉ là tương thích cho kiểm tra không AI.
+- Ghi tài liệu `references/AI_NODE_AUDIT_V1.md`: không xóa node hoặc làm đứt line workflow cũ trong quá trình chuyển đổi.
+
+**Kiểm tra:** `npm.cmd test` — build thành công, **70/70** bài kiểm tra đạt. Regression xác nhận 12 họ node được danh mục hóa đúng một lần, có mặt trong specs và giữ ranh giới AI tổng quát/Media/kiểm tra quy tắc.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 
