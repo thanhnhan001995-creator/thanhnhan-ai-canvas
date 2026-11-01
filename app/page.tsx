@@ -238,7 +238,7 @@ function inspectWorkflow(nodes: ContentFlowNode[], edges: Edge[]): WorkflowInspe
       && edge.targetHandle === port.id
       && !nodes.find((source) => source.id === edge.source)?.data.paused
     ));
-    const cacheAwareAiNode = new Set(["Lựa chọn model AI", "Gọi AI tạo văn bản", "Gọi AI trả JSON", "Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI", "Phân tích từng đoạn video", "Tổng hợp nội dung video", "Chọn highlight bằng AI", "Làm rõ highlight lặp", "Tạo tiêu đề", "Chọn ảnh thumbnail bằng AI", "Bố cục thumbnail bằng AI"]).has(family);
+    const cacheAwareAiNode = new Set(["Lựa chọn model AI", "Gọi AI tạo văn bản", "Gọi AI trả JSON", "Thực thi tác vụ AI", "Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI", "Phân tích từng đoạn video", "Tổng hợp nội dung video", "Chọn highlight bằng AI", "Làm rõ highlight lặp", "Tạo tiêu đề", "Chọn ảnh thumbnail bằng AI", "Bố cục thumbnail bằng AI"]).has(family);
     const hasValidCache = cacheAwareAiNode && node.data.inputs.some((port) => port.type === "CachedData" && hasActiveInput(port));
     // Lưu file có storedfile là nguồn tái sử dụng hoàn chỉnh; chỉ node mới
     // chưa từng lưu mới phải bị báo thiếu input/folder để bắt đầu một lượt lưu.
@@ -343,11 +343,11 @@ function inspectWorkflow(nodes: ContentFlowNode[], edges: Edge[]): WorkflowInspe
     }
     beacons.set(node.id, beacon);
   }
-  const hasAiCall = nodes.some((node) => ["Gọi AI tạo văn bản", "Gọi AI trả JSON", "Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"].includes(nodeFamilyOf(node)));
+  const hasAiCall = nodes.some((node) => ["Gọi AI tạo văn bản", "Gọi AI trả JSON", "Thực thi tác vụ AI", "Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"].includes(nodeFamilyOf(node)));
   const hasKey = nodes.some((node) => String(node.data.config.apiKey ?? "").trim());
   const hasOllamaSetup = nodes.some((node) => ["Thiết lập AI", "Chọn nhà cung cấp AI"].includes(nodeFamilyOf(node)) && String(node.data.config.provider ?? "") === "Ollama");
   if (hasAiCall && !hasKey && !hasOllamaSetup) {
-    const firstAi = nodes.find((node) => ["Gọi AI tạo văn bản", "Gọi AI trả JSON", "Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"].includes(nodeFamilyOf(node)));
+    const firstAi = nodes.find((node) => ["Gọi AI tạo văn bản", "Gọi AI trả JSON", "Thực thi tác vụ AI", "Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"].includes(nodeFamilyOf(node)));
     if (firstAi) {
       issues.push({ nodeId: firstAi.id, beacon: "error", message: "Workflow chưa có API key. Nhập trực tiếp trong Thiết lập AI hoặc nối Cấu hình API key vào cổng APIKey." });
       beacons.set(firstAi.id, "error");
@@ -910,7 +910,7 @@ const SEMANTIC_NODE_ICONS: Record<string, string> = {
   "Tạo tiêu đề": "T", "Tạo mô tả": "▤", "Tạo chapter metadata": "☷", "Tạo hashtag": "#", "Tạo thumbnail": "◫", "Chọn ảnh thumbnail bằng AI": "◉", "Chấm thumbnail": "◎", "A/B thumbnail": "⇄", "Upload YouTube": "⇧", "Đặt lịch đăng": "◷", "Thêm playlist": "☷", "Thiết lập quyền riêng tư": "▣", "Ghim bình luận": "⚑", "Lưu kết quả xuất bản": "◆",
   "Bắt đầu": "▶", "Kết thúc": "■", "If/Else": "?", "Switch": "⇄", "Chạy song song": "∥", "Gộp kết quả": "⋈", "Loop từng cảnh": "↻", "Chờ xử lý": "◷", "Delay": "◴", "Retry": "↻", "Giới hạn thử lại": "#", "Chạy thủ công": "☝", "Yêu cầu phê duyệt": "✓", "Tạm dừng": "Ⅱ", "Xử lý lỗi": "!", "Workflow con": "▧", "Gọi API": "{}", "Chạy mã": "</>",
   "Lưu biến": "◆", "Chuyển đổi dữ liệu": "⇄", "Ghép dữ liệu": "⋈", "Lọc danh sách": "🔎", "Sắp xếp danh sách": "↕", "Chọn phần tử": "◉", "Lưu file": "▤", "Lưu phiên bản": "◴", "Lấy phiên bản cũ": "↶", "Đọc thư viện": "▰", "Ghi log": "≡", "Theo dõi chi phí": "$", "Cache kết quả": "□", "Xóa file tạm": "⌫",
-  "Chọn nhà cung cấp AI": "☁", "Chọn mô hình AI": "◈", "Lựa chọn model AI": "◎", "Soạn system prompt": "✎", "Tạo prompt từ dữ liệu": "✦", "Gọi AI trả JSON": "{}", "Phân tích hình ảnh bằng AI": "◫", "Phân tích âm thanh bằng AI": "♪", "Phân tích video bằng AI": "▶", "Chuẩn bị tư liệu phân tích video": "▣", "Tách âm thanh từ video": "♫", "Chấm điểm đầu ra AI": "◎", "Duyệt đầu ra AI": "✓",
+  "Chọn nhà cung cấp AI": "☁", "Chọn mô hình AI": "◈", "Lựa chọn model AI": "◎", "Soạn system prompt": "✎", "Tạo prompt từ dữ liệu": "✦", "Gọi AI trả JSON": "{}", "Thực thi tác vụ AI": "✦", "Phân tích hình ảnh bằng AI": "◫", "Phân tích âm thanh bằng AI": "♪", "Phân tích video bằng AI": "▶", "Chuẩn bị tư liệu phân tích video": "▣", "Tách âm thanh từ video": "♫", "Chấm điểm đầu ra AI": "◎", "Duyệt đầu ra AI": "✓",
   "Thiết lập AI": "⚙", "Tạo prompt AI": "✎", "Xử lý văn bản bằng AI": "✦", "Gọi AI": "✦", "Phân tích ảnh hoặc âm thanh bằng AI": "🔎", "Đánh giá đầu ra AI": "◎",
   "Nhập chủ đề và yêu cầu": "✎", "Nhập trực tiếp": "✎", "Nguồn file": "▤", "Nguồn folder": "▰", "Kho ảnh từ thư mục": "▰", "Cấu hình vận hành": "⚙", "Nghiên cứu Internet": "🔎", "Đọc nguồn": "▤", "Xác minh dữ kiện": "✓", "Đánh giá và duyệt nguồn": "◎", "Phát triển ý tưởng": "✦", "Phân tích khán giả": "◉", "Góc tiếp cận": "◔", "Dàn ý nội dung": "☷", "Viết và biên tập": "✎", "Kiểm tra và duyệt nội dung": "✓", "Viết kịch bản hoàn chỉnh": "▤", "Thiết kế phân cảnh": "▦", "Kiểm tra kịch bản": "✓", "Tạo ảnh": "✦", "Phân tích nội dung video": "🔎", "Tạo highlight bằng AI": "✂", "Tạo tư liệu video bằng AI": "✦", "Chỉnh sửa video": "✂", "Sản xuất giọng đọc": "♪", "Biên tập lời đọc": "↹", "Nhạc, hiệu ứng và phối âm": "♫", "Chuẩn hóa và xuất subtitle": "T", "Dựng cảnh": "▦", "Render và duyệt cảnh": "▶", "Dựng video tổng": "⋈", "Render video": "▶", "Kiểm tra thành phẩm": "✓", "Chấm điểm và duyệt thành phẩm": "◎", "Metadata xuất bản": "▤", "Thumbnail": "◫", "Chọn ảnh thumbnail bằng AI": "◉", "Đăng YouTube": "⇧", "Phân nhánh workflow": "?", "Chạy song song và gộp": "∥", "Chờ, thử lại và xử lý lỗi": "↻", "Tự động hóa nâng cao": "⚙", "Xử lý dữ liệu": "⇄", "Lưu trữ và vận hành": "◆",
 };
@@ -983,6 +983,7 @@ const OPTIONAL_INPUT_TYPES: Record<string, string[]> = {
   "Lựa chọn model AI": ["CachedData"],
   "Gọi AI tạo văn bản": ["CachedData"],
   "Gọi AI trả JSON": ["CachedData"],
+  "Thực thi tác vụ AI": ["Dữ liệu", "Prompt", "SystemPrompt", "CachedData"],
   "Phân tích hình ảnh bằng AI": ["CachedData", "AttentionRegion"],
   "Phân tích âm thanh bằng AI": ["CachedData"],
   "Phân tích video bằng AI": ["CachedData", "TimedTranscript"],
@@ -1219,6 +1220,12 @@ const AI_NODE_FIELDS: Record<string, ConfigField[]> = {
     { key: "jsonShape", label: "Kiểu JSON cần nhận", type: "select", options: ["Một đối tượng", "Danh sách đối tượng", "Bảng dữ liệu", "Khác"], defaultValue: "Một đối tượng" },
     { key: "customSchema", label: "JSON Schema tùy chỉnh", type: "code", placeholder: "{ \"type\": \"object\", \"properties\": {} }", required: true, showWhen: { key: "jsonShape", value: "Khác" } },
     { key: "fallbackModel", label: "Model dự phòng khi chưa nối AIModel", type: "select", options: AI_MODEL_OPTIONS, defaultValue: "Tự động (khuyến nghị)" },
+  ],
+  "Thực thi tác vụ AI": [
+    { key: "taskType", label: "Loại tác vụ", type: "select", options: ["Tạo nội dung", "Phân loại", "Trích xuất", "Phân tích"], defaultValue: "Tạo nội dung", required: true, help: "Chọn mục đích để TaskSpec và hướng dẫn gọi AI được ghi rõ." },
+    { key: "instructions", label: "Chỉ dẫn tác vụ", type: "textarea", placeholder: "Mô tả kết quả cần tạo, phân loại, trích xuất hoặc phân tích...", required: true, help: "Có thể nối Prompt/SystemPrompt; phần này vẫn là chỉ dẫn chính của TaskSpec, không tự gọi AI." },
+    { key: "outputFormat", label: "Định dạng kết quả", type: "select", options: ["Văn bản", "JSON"], defaultValue: "Văn bản", required: true },
+    { key: "successCriteria", label: "Tiêu chí hoàn thành", type: "textarea", placeholder: "Mỗi dòng một tiêu chí. Ví dụ: chỉ dùng dữ liệu đầu vào.", help: "Không bắt buộc. Nếu trống, node dùng tiêu chí mặc định: nêu rõ bằng chứng và phần chưa đủ dữ liệu." },
   ],
   "Phân tích hình ảnh bằng AI": [
     { key: "analysisGoal", label: "Mục tiêu phân tích", type: "select", options: ["Mô tả ảnh", "Trích xuất chữ", "Phát hiện đối tượng", "Đánh giá chất lượng", "Kiểm tra thương hiệu", "Khác"], defaultValue: "Mô tả ảnh" },

@@ -1834,6 +1834,14 @@ export const NODE_SPECS: NodeSpec[] = [
   },
   {
     "group": "AI & mô hình",
+    "order": 7.5,
+    "name": "Thực thi tác vụ AI",
+    "settings": "Loại tác vụ, chỉ dẫn, tiêu chí hoàn thành, định dạng đầu ra; nhận AIExecutionProfile từ AIModel",
+    "input": "Dữ liệu, Prompt, SystemPrompt, AIModel, CachedData",
+    "output": "AIResult, Report, CachedData"
+  },
+  {
+    "group": "AI & mô hình",
     "order": 8,
     "name": "Phân tích hình ảnh bằng AI",
     "settings": "Yêu cầu phân tích, vùng ưu tiên, mức chi tiết; model nhận từ AIModel",

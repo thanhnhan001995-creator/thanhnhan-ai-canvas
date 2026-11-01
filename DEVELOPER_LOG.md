@@ -1845,6 +1845,16 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm.cmd test` — build thành công, **70/70** bài kiểm tra đạt. Regression xác nhận 12 họ node được danh mục hóa đúng một lần, có mặt trong specs và giữ ranh giới AI tổng quát/Media/kiểm tra quy tắc.
 
+## 2026-11-01 +07:00 — AIC-02: Node Thực thi tác vụ AI
+
+**Phạm vi:** Thêm một node AI tổng quát cho tác vụ văn bản/JSON, không gắn tên video hoặc media.
+
+- Thêm node cơ bản **Thực thi tác vụ AI**. Node chỉ nhận profile qua cổng `AIModel`; không có lựa chọn model/API key riêng, nên dùng đúng provider/model mà node Thiết lập AI truyền tới.
+- Hỗ trợ bốn loại tác vụ v1: tạo nội dung, phân loại, trích xuất và phân tích. Node nhận Dữ liệu hoặc Prompt, SystemPrompt tùy chọn, chỉ dẫn bắt buộc, tiêu chí hoàn thành và chọn output Văn bản/JSON.
+- Mỗi lần chạy trả `AIResult`, `Report` và `CachedData`. Kết quả được bao cùng `TaskSpec`, bằng chứng nguồn input, mức dùng token và trạng thái cần xem lại; API key không nằm trong output.
+
+**Kiểm tra:** `npm.cmd test` — build thành công, **71/71** bài kiểm tra đạt. Regression mô phỏng lời gọi AI xác nhận profile bắt buộc, request dùng profile nối dây, và ba output gồm kết quả/TaskSpec, Report, cache đều đúng.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 

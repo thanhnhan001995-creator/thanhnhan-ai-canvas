@@ -2572,7 +2572,7 @@ function aiCallSettings(node: WorkflowNodeLike, inputs: Record<string, unknown>)
   // Workflow cũ có thể chưa có object config. Không được để việc đọc cấu hình
   // làm hỏng cả node AI trước khi nó kịp báo thiếu dữ liệu nghiệp vụ.
   const config = node.data.config ?? {};
-  const usesConnectedAiModelOnly = ["Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"].includes(node.data.label);
+  const usesConnectedAiModelOnly = ["Thực thi tác vụ AI", "Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"].includes(node.data.label);
   const configuredModel = String(model.model ?? (usesConnectedAiModelOnly ? "" : config.model) ?? "").trim();
   const cacheKey = String(model.cacheKey ?? "").trim();
   const temperatureLabel = String(model.temperature ?? config.temperature ?? "Cân bằng (0.7)");
@@ -2599,6 +2599,67 @@ function aiCallSettings(node: WorkflowNodeLike, inputs: Record<string, unknown>)
     endpoint: profile.endpoint,
     cacheKey,
   };
+}
+
+function taskInputText(node: WorkflowNodeLike, inputs: Record<string, unknown>, materials: { record: AiMaterialCacheRecord; source: "cache" | "direct" }): string {
+  if (materials.source === "cache") return cachedText(materials.record);
+  const prompt = input(node, inputs, "Prompt");
+  const data = input(node, inputs, "Dữ liệu") ?? input(node, inputs, "Data");
+  if (prompt !== undefined && data !== undefined) return `${promptDataText(prompt)}\n\nDỮ LIỆU BỔ SUNG:\n${promptDataText(data)}`;
+  return promptDataText(prompt ?? data);
+}
+
+async function executeAiTaskNode(node: WorkflowNodeLike, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const config = node.data.config ?? {};
+  const settings = aiCallSettings(node, inputs);
+  if (!settings.provider || !settings.model || (settings.provider !== "Ollama" && !settings.apiKey)) {
+    throw new Error("Thực thi tác vụ AI cần nối cổng AIModel từ node Thiết lập AI có provider, model và API key hợp lệ (Ollama không cần API key).");
+  }
+  if (!["OpenAI", "Ollama"].includes(settings.provider)) throw new Error(`Thực thi tác vụ AI hiện hỗ trợ OpenAI và Ollama; profile đang chọn ${settings.provider}.`);
+  const instructions = String(config.instructions ?? "").trim();
+  if (!instructions) throw new Error("Thực thi tác vụ AI cần Chỉ dẫn tác vụ.");
+  const materials = preferredAiMaterials(node, inputs);
+  const taskInput = taskInputText(node, inputs, materials);
+  if (taskInput === "(Chưa có dữ liệu đầu vào)") throw new Error("Thực thi tác vụ AI cần nối Dữ liệu hoặc Prompt.");
+  const taskType = String(config.taskType ?? "Tạo nội dung");
+  const json = String(config.outputFormat ?? "Văn bản") === "JSON";
+  const systemPrompt = promptDataText(input(node, inputs, "SystemPrompt"));
+  const prompt = [
+    `Tác vụ: ${taskType}.`,
+    `Chỉ dẫn: ${instructions}`,
+    "Chỉ sử dụng dữ liệu đầu vào làm bằng chứng. Nếu thiếu dữ liệu, nêu rõ phần chưa đủ thay vì suy đoán.",
+    `DỮ LIỆU ĐẦU VÀO:\n${taskInput}`,
+  ].join("\n\n");
+  const criteria = lines(config.successCriteria);
+  const task = taskSpec({
+    nodeId: node.id,
+    goal: `${taskType}: ${instructions}`,
+    expectedOutput: json ? "Record" : "Text",
+    inputTypes: node.data.inputs
+      .filter((port) => !/^(AIModel|AIProvider|APIKey|CachedData|SystemPrompt)$/i.test(port.type))
+      .map((port) => artifactTypeForPortType(port.type)),
+    instructions,
+    successCriteria: criteria.length ? criteria : ["Kết luận chỉ dựa trên bằng chứng đầu vào.", "Nêu rõ phần chưa đủ bằng chứng để kết luận."],
+  });
+  const reserve = estimatedAiInputTokens(`${systemPrompt}\n${prompt}`);
+  const payload = await apiJson({
+    action: "ai",
+    provider: settings.provider,
+    apiKey: settings.apiKey,
+    model: settings.model,
+    temperature: settings.temperature,
+    maxOutputTokens: aiBudget(settings, reserve),
+    system: `${systemPrompt}\n${json ? "Chỉ trả JSON hợp lệ, không dùng markdown." : ""}`.trim(),
+    prompt,
+    json,
+    promptCacheKey: materials.record.cacheKey,
+  });
+  const result = withAiTaskReport(attachAiUsage(payload.result, payload.usage, settings, reserve), task, [{ kind: "task-input", source: materials.source, characters: taskInput.length }]);
+  return outputs(node, {
+    AIResult: { ...result, cacheSource: materials.source },
+    Report: result.report,
+    CachedData: cacheHandle(materials.record),
+  });
 }
 
 function estimatedAiInputTokens(text: string, imageCount = 0) {
@@ -3407,6 +3468,7 @@ export async function executeWorkflowNode(
   if (node.data.label === "Tìm ảnh tương đồng") return executeImageSearchNode(node, inputs, store, reportProgress);
   if (["If/Else", "Switch"].includes(node.data.label)) return executeRoutingNode(node, inputs);
   if (["Soạn system prompt", "Tạo prompt từ dữ liệu"].includes(node.data.label)) return executeAiPromptNode(node, inputs);
+  if (node.data.label === "Thực thi tác vụ AI") return executeAiTaskNode(node, inputs);
   if (["Gọi AI tạo văn bản", "Gọi AI trả JSON", "Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"].includes(node.data.label)) return executeAiRuntimeNode(node, inputs, store);
   if (["Chấm điểm đầu ra AI", "Duyệt đầu ra AI"].includes(node.data.label)) return executeAiReviewNode(node, inputs);
   if (node.data.label === "Xem dữ liệu trên canvas") return executeCanvasDataViewer(node, inputs);
