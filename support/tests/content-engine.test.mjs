@@ -10,7 +10,7 @@ const { displayPortLabel, getPortVisual } = await import("../../app/port-library
 const { currentOpenAiModel, getAiModelCapabilities, openAiImageDetail, openAiResponseVerbosity, replacementForRetiredOpenAiModel, supportsOpenAiReasoning } = await import("../../app/ai-model-capabilities.ts");
 const { localAiModelIds, mergeScannedOllamaModel, normalizeLocalAiRegistry, removeLocalAiModel } = await import("../../app/local-ai-registry.ts");
 const { nextNodeName } = await import("../../app/node-identity.ts");
-const { artifactOutputsForPorts, artifactSummary, artifactTypeForPortType, cardinalityForPortType, executionDiagnostic, finishNodeRun, isArtifact, portCardinalityCompatible, portSpecFor, startNodeRun, unwrapArtifact } = await import("../../app/data-contracts.ts");
+const { aiExecutionProfile, aiReport, artifactOutputsForPorts, artifactSummary, artifactTypeForPortType, cardinalityForPortType, executionDiagnostic, finishNodeRun, isArtifact, portCardinalityCompatible, portSpecFor, startNodeRun, taskSpec, unwrapArtifact } = await import("../../app/data-contracts.ts");
 
 function workflowNode(label, inputTypes, outputTypes, config = {}) {
   return {
@@ -44,6 +44,8 @@ test("artifact contracts preserve data type, cardinality, provenance, and legacy
   assert.equal(artifactTypeForPortType("Image[]"), "ImageSet");
   assert.equal(artifactTypeForPortType("FrameIndex"), "FrameIndex");
   assert.equal(artifactTypeForPortType("TimedTranscript"), "TimedTranscript");
+  assert.equal(artifactTypeForPortType("AIText"), "Text");
+  assert.equal(artifactTypeForPortType("AIJson"), "Record");
   assert.equal(cardinalityForPortType("Image[]"), "many");
   assert.equal(cardinalityForPortType("ImageSearchList"), "many");
   assert.equal(cardinalityForPortType("Audio"), "one");
@@ -70,6 +72,53 @@ test("artifact contracts preserve data type, cardinality, provenance, and legacy
   assert.equal(failed.status, "failed");
   assert.equal(failed.diagnostics[0].code, "execution_failed");
   assert.match(failed.diagnostics[0].message, /Thiếu ảnh mẫu/);
+});
+
+test("AI execution profiles keep secrets out of portable contracts and reports retain their task", () => {
+  const profile = aiExecutionProfile({
+    provider: "Ollama",
+    model: "qwen3:4b",
+    localEndpoint: "http://127.0.0.1:11434",
+    secretRef: "ai-profile:node-1",
+    temperature: 0.4,
+    maxOutputTokens: 800,
+  });
+  assert.equal(profile.kind, "tesseract-ai-profile");
+  assert.equal(profile.executionMode, "local");
+  assert.equal(profile.secretRef, "ai-profile:node-1");
+  assert.equal(Object.hasOwn(profile, "apiKey"), false);
+
+  const task = taskSpec({
+    nodeId: "node-1",
+    goal: "Tóm tắt tài liệu",
+    expectedOutput: "Report",
+    inputTypes: ["Text", "Text"],
+  });
+  const report = aiReport({
+    status: "needs-review",
+    conclusion: "Đã tóm tắt từ nguồn đầu vào.",
+    evidence: [{ source: "input-1" }],
+    needsFix: false,
+    task,
+  });
+  assert.equal(report.task.id, task.id);
+  assert.equal(report.status, "needs-review");
+  assert.equal(report.evidence.length, 1);
+});
+
+test("AI setup node emits a reusable profile without exposing its API key", async () => {
+  const providerNode = workflowNode("Chọn nhà cung cấp AI", ["APIKey"], ["AIProvider"], {
+    provider: "OpenAI",
+    apiKey: "test-secret-key",
+    maxInputTokens: 12000,
+  });
+  const providerOutput = await executeWorkflowNode(providerNode, {}, new Map());
+  const profile = providerOutput["output-1"];
+  assert.equal(profile.kind, "tesseract-ai-profile");
+  assert.equal(profile.provider, "OpenAI");
+  assert.equal(profile.maxInputTokens, 12000);
+  assert.equal(Object.hasOwn(profile, "apiKey"), false);
+  assert.match(profile.secretRef, /^ai-profile:/);
 });
 
 test("basic catalog covers valid primitive nodes without replacing the advanced catalog", () => {

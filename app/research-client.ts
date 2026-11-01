@@ -1,6 +1,7 @@
 import { executionUnavailableReason } from "./node-execution.ts";
 import { portTypesCompatible } from "./node-contracts.ts";
 import { openAiImageCapability } from "./ai-model-capabilities.ts";
+import { aiExecutionProfile, aiReport, artifactTypeForPortType, taskSpec, type TaskSpec } from "./data-contracts.ts";
 
 type FieldValue = string | number | boolean;
 type StoredFileReference = { filePath: string; name: string; type: string; size: number; storedAt?: string };
@@ -91,6 +92,20 @@ const aiMaterialCache = new Map<string, AiMaterialCacheRecord>();
 // AIModel cần chuyển qua node sau, nhưng không được đưa API key vào output
 // hiển thị trên canvas. Cache khóa bí mật này chỉ sống trong phiên app.
 const aiModelSecrets = new Map<string, string>();
+
+function aiProfileSecretRef(node: WorkflowNodeLike): string {
+  return `ai-profile:${node.id}`;
+}
+
+function rememberAiProfileSecret(secretRef: string | undefined, apiKey: unknown): void {
+  const key = String(apiKey ?? "").trim();
+  if (secretRef && key) aiModelSecrets.set(secretRef, key);
+}
+
+function profileSecret(profile: Record<string, unknown>): string {
+  const secretRef = String(profile.secretRef ?? profile.cacheKey ?? "").trim();
+  return String(profile.apiKey ?? aiModelSecrets.get(secretRef) ?? "").trim();
+}
 
 export function resetAiTokenUsage() {
   sessionAiTokenUsage = { input: 0, output: 0, reservedInput: 0 };
@@ -2472,29 +2487,31 @@ function executeAiPromptNode(node: WorkflowNodeLike, inputs: Record<string, unkn
 
 function executeAiConfigurationNode(node: WorkflowNodeLike, inputs: Record<string, unknown>): Record<string, unknown> {
   const config = node.data.config;
+  const upstream = record(input(node, inputs, "AIProvider"));
+  const directApiKey = input(node, inputs, "APIKey") ?? config.apiKey;
+  const secretRef = String(upstream.secretRef ?? aiProfileSecretRef(node)).trim();
+  const provider = String(upstream.provider ?? config.provider ?? "OpenAI");
+  const model = String(config.customModel || config.model || upstream.model || "Tự động (khuyến nghị)");
+  const profile = aiExecutionProfile({
+    provider,
+    model,
+    localEndpoint: String(upstream.endpoint ?? upstream.localEndpoint ?? config.localEndpoint ?? ""),
+    secretRef,
+    temperature: config.temperature === "Tùy chỉnh" ? config.customTemperature : (config.temperature ?? 0.7),
+    maxOutputTokens: config.maxOutputTokens,
+    maxInputTokens: upstream.maxInputTokens ?? upstream.maxWorkflowTokens ?? config.maxInputTokens ?? config.maxWorkflowTokens,
+    maxOutputWorkflowTokens: upstream.maxOutputWorkflowTokens ?? config.maxOutputWorkflowTokens,
+  });
+  // Bí mật chỉ được giữ trong bộ nhớ phiên. Output và Artifact chỉ có secretRef.
+  rememberAiProfileSecret(secretRef, directApiKey ?? profileSecret(upstream));
   if (node.data.label === "Chọn nhà cung cấp AI") {
     return output(node, {
-      provider: String(config.provider ?? "OpenAI"),
+      ...profile,
       region: String(config.region ?? "Tự động (khuyến nghị)"),
-      localEndpoint: String(config.localEndpoint ?? ""),
       customProvider: String(config.customProvider ?? ""),
-      maxInputTokens: Number(config.maxInputTokens ?? config.maxWorkflowTokens ?? 40_000),
-      maxOutputWorkflowTokens: Number(config.maxOutputWorkflowTokens ?? 20_000),
-      apiKey: String(input(node, inputs, "APIKey") ?? config.apiKey ?? ""),
     });
   }
-  const provider = input(node, inputs, "AIProvider") as { provider?: unknown; apiKey?: unknown; localEndpoint?: unknown; maxInputTokens?: unknown; maxOutputWorkflowTokens?: unknown; maxWorkflowTokens?: unknown } | undefined;
-  return output(node, {
-    provider: String(provider?.provider ?? config.provider ?? "OpenAI"),
-    model: String(config.customModel || config.model || "Tự động (khuyến nghị)"),
-    temperature: String(config.temperature ?? "Cân bằng (0.7)"),
-    customTemperature: Number(config.customTemperature ?? 0.7),
-    maxOutputTokens: String(config.maxOutputTokens ?? "2.000 — tiêu chuẩn"),
-    maxInputTokens: Number(provider?.maxInputTokens ?? provider?.maxWorkflowTokens ?? config.maxInputTokens ?? config.maxWorkflowTokens ?? 40_000),
-    maxOutputWorkflowTokens: Number(provider?.maxOutputWorkflowTokens ?? config.maxOutputWorkflowTokens ?? 20_000),
-    apiKey: String(provider?.apiKey ?? config.apiKey ?? ""),
-    localEndpoint: String(provider?.localEndpoint ?? config.localEndpoint ?? ""),
-  });
+  return output(node, profile);
 }
 
 function selectionMaxOutputTokens(value: unknown): number {
@@ -2504,7 +2521,7 @@ function selectionMaxOutputTokens(value: unknown): number {
 async function executeAiModelSelectionNode(node: WorkflowNodeLike, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
   const provider = record(input(node, inputs, "AIProvider"));
   const providerName = String(provider.provider ?? "OpenAI");
-  const apiKey = String(provider.apiKey ?? "").trim();
+  const apiKey = profileSecret(provider);
   if (providerName !== "OpenAI") throw new Error(`Lựa chọn model AI hiện chạy đánh giá trực tiếp bằng OpenAI; provider đang chọn là ${providerName}.`);
   if (!apiKey) throw new Error("Lựa chọn model AI chưa nhận được API key từ AIProvider.");
   const materials = preferredAiMaterials(node, inputs);
@@ -2532,15 +2549,19 @@ async function executeAiModelSelectionNode(node: WorkflowNodeLike, inputs: Recor
   const selected = record(payload.result);
   const model = String(selected.model ?? "").trim();
   if (!model) throw new Error("AI đánh giá không trả về model hợp lệ.");
-  aiModelSecrets.set(cached.cacheKey, apiKey);
+  const secretRef = aiProfileSecretRef(node);
+  aiModelSecrets.set(secretRef, apiKey);
   return withAiInputCache(node, "AIModel", attachAiUsage({
-    provider: providerName,
-    model,
-    temperature: "Cân bằng (0.7)",
-    maxOutputTokens: "2.000 — tiêu chuẩn",
-    maxInputTokens: settings.maxInputTokens,
-    maxOutputWorkflowTokens: settings.maxOutputWorkflowTokens,
-    localEndpoint: String(provider.localEndpoint ?? ""),
+    ...aiExecutionProfile({
+      provider: providerName,
+      model,
+      temperature: 0.7,
+      maxOutputTokens: 2_000,
+      maxInputTokens: settings.maxInputTokens,
+      maxOutputWorkflowTokens: settings.maxOutputWorkflowTokens,
+      localEndpoint: String(provider.endpoint ?? provider.localEndpoint ?? ""),
+      secretRef,
+    }),
     cacheKey: cached.cacheKey,
     selection: { preference, evaluatedBy: selected.evaluatedBy, candidates: selected.candidates, reason: selected.reason, manifestCachedAt: cached.createdAt },
   }, payload.usage, settings, reserve), materials);
@@ -2557,14 +2578,25 @@ function aiCallSettings(node: WorkflowNodeLike, inputs: Record<string, unknown>)
   const temperatureLabel = String(model.temperature ?? config.temperature ?? "Cân bằng (0.7)");
   const numericTemperature = Number(model.customTemperature ?? config.customTemperature);
   const labelledTemperature = Number(temperatureLabel.match(/\(([0-9.]+)\)/)?.[1]);
-  return {
-    provider: String(model.provider ?? (usesConnectedAiModelOnly ? "" : config.provider) ?? "OpenAI"),
+  const profile = aiExecutionProfile({
+    provider: model.provider ?? (usesConnectedAiModelOnly ? "" : config.provider) ?? "OpenAI",
     model: configuredModel === "Tự động (khuyến nghị)" ? "" : configuredModel,
-    apiKey: String(model.apiKey ?? aiModelSecrets.get(cacheKey) ?? (usesConnectedAiModelOnly ? "" : config.apiKey) ?? "").trim(),
-    maxOutputTokens: Number(String(model.maxOutputTokens ?? config.maxOutputTokens ?? "").replace(/[^0-9]/g, "")) || 2000,
-    maxInputTokens: Math.max(1_000, Math.min(40_000, Number(model.maxInputTokens ?? model.maxWorkflowTokens ?? config.maxInputTokens ?? config.maxWorkflowTokens ?? 40_000) || 40_000)),
-    maxOutputWorkflowTokens: Math.max(500, Math.min(20_000, Number(model.maxOutputWorkflowTokens ?? config.maxOutputWorkflowTokens ?? 20_000) || 20_000)),
-    temperature: Math.max(0, Math.min(2, Number.isFinite(numericTemperature) && temperatureLabel === "Tùy chỉnh" ? numericTemperature : Number.isFinite(labelledTemperature) ? labelledTemperature : 0.7)),
+    localEndpoint: model.endpoint ?? model.localEndpoint ?? config.localEndpoint,
+    secretRef: model.secretRef ?? model.cacheKey,
+    temperature: Number.isFinite(numericTemperature) && temperatureLabel === "Tùy chỉnh" ? numericTemperature : Number.isFinite(labelledTemperature) ? labelledTemperature : 0.7,
+    maxOutputTokens: model.maxOutputTokens ?? config.maxOutputTokens,
+    maxInputTokens: model.maxInputTokens ?? model.maxWorkflowTokens ?? config.maxInputTokens ?? config.maxWorkflowTokens,
+    maxOutputWorkflowTokens: model.maxOutputWorkflowTokens ?? config.maxOutputWorkflowTokens,
+  });
+  return {
+    provider: profile.provider,
+    model: profile.model,
+    apiKey: profileSecret(model) || (usesConnectedAiModelOnly ? "" : String(config.apiKey ?? "").trim()),
+    maxOutputTokens: profile.maxOutputTokens,
+    maxInputTokens: profile.maxInputTokens,
+    maxOutputWorkflowTokens: profile.maxOutputWorkflowTokens,
+    temperature: profile.temperature,
+    endpoint: profile.endpoint,
     cacheKey,
   };
 }
@@ -2609,6 +2641,51 @@ function attachAiUsage(result: unknown, rawUsage: unknown, settings: ReturnType<
   return { ...record(result), usage: usageWithBudget };
 }
 
+function aiTaskSpecForNode(node: WorkflowNodeLike, goal: string, expectedOutput: string): TaskSpec {
+  const config = node.data.config ?? {};
+  const instructions = String(config.instructions ?? "").trim();
+  return taskSpec({
+    nodeId: node.id,
+    goal,
+    expectedOutput: artifactTypeForPortType(expectedOutput),
+    inputTypes: node.data.inputs
+      .filter((port) => !/^(AIModel|AIProvider|APIKey|CachedData)$/i.test(port.type))
+      .map((port) => artifactTypeForPortType(port.type)),
+    ...(instructions ? { instructions } : {}),
+    successCriteria: [
+      "Kết luận chỉ dựa trên bằng chứng đầu vào.",
+      "Nêu rõ phần chưa đủ bằng chứng để kết luận.",
+    ],
+  });
+}
+
+/** Bọc kết quả AI trong Report thống nhất nhưng vẫn giữ trường output cũ cho workflow hiện hữu. */
+function withAiTaskReport(result: unknown, task: TaskSpec, evidence: unknown[] = []): Record<string, unknown> {
+  const value = record(result);
+  const explicitEvidence = Array.isArray(value.evidence) ? value.evidence : evidence;
+  const confidenceValue = Number(value.confidence);
+  const passed = typeof value.passed === "boolean" ? value.passed : undefined;
+  const needsFix = value.needsFix === true || value.status === "Cần sửa" || value.status === "Không đạt";
+  const conclusion = String(value.summary ?? value.conclusion ?? value.text ?? value.output ?? "AI đã hoàn thành tác vụ; hãy xem bằng chứng trước khi dùng kết quả.").trim();
+  const repairItems = Array.isArray(value.repairItems)
+    ? value.repairItems.filter((item): item is { location?: string; reason: string; fix?: string } => Boolean(item) && typeof item === "object" && typeof (item as { reason?: unknown }).reason === "string")
+    : [];
+  return {
+    ...value,
+    taskSpec: task,
+    report: aiReport({
+      status: needsFix ? "needs-fix" : passed === true ? "completed" : "needs-review",
+      conclusion,
+      evidence: explicitEvidence,
+      ...(Number.isFinite(confidenceValue) ? { confidence: confidenceValue } : {}),
+      ...(passed === undefined ? {} : { passed }),
+      needsFix,
+      repairItems,
+      task,
+    }),
+  };
+}
+
 async function executeAiRuntimeNode(node: WorkflowNodeLike, inputs: Record<string, unknown>, store: RuntimeFileStore): Promise<Record<string, unknown>> {
   const config = node.data.config ?? {};
   const settings = aiCallSettings(node, inputs);
@@ -2631,7 +2708,9 @@ async function executeAiRuntimeNode(node: WorkflowNodeLike, inputs: Record<strin
     const inputReserve = estimatedAiInputTokens(requestText);
     const maxOutputTokens = aiBudget(settings, inputReserve);
     const payload = await apiJson({ action: "ai", provider: settings.provider, apiKey: settings.apiKey, model: settings.model, temperature: settings.temperature, maxOutputTokens, system: `${systemPrompt}\n${json ? "Chỉ trả JSON hợp lệ, không dùng markdown." : ""}`, prompt, json, promptCacheKey: materials.record.cacheKey });
-    return withAiInputCache(node, json ? "AIJson" : "AIText", attachAiUsage(payload.result, payload.usage, settings, inputReserve), materials);
+    const outputType = json ? "AIJson" : "AIText";
+    const task = aiTaskSpecForNode(node, goal || (json ? "Tạo JSON từ prompt" : "Tạo văn bản từ prompt"), outputType);
+    return withAiInputCache(node, outputType, withAiTaskReport(attachAiUsage(payload.result, payload.usage, settings, inputReserve), task), materials);
   }
 
   if (settings.provider === "Ollama") {
@@ -2650,7 +2729,8 @@ async function executeAiRuntimeNode(node: WorkflowNodeLike, inputs: Record<strin
     const visionPrompt = `${prompt}\n\n${attentionPrompt(attention)}`;
     const visionReserve = estimatedAiInputTokens(`${systemPrompt}\n${goal}\n${visionPrompt}`, aiFiles.length);
     const payload = await uploadFiles("analyze-images", aiFiles, { apiKey: settings.apiKey, model: settings.model, maxOutputTokens: aiBudget(settings, visionReserve), goal, detail: String(config.detail ?? "Cân bằng"), prompt: visionPrompt, system: systemPrompt, promptCacheKey: materials.record.cacheKey });
-    return withAiInputCache(node, "AIAnalysis", attachAiUsage(payload.result, payload.usage, settings, visionReserve), materials);
+    const task = aiTaskSpecForNode(node, goal || "Phân tích hình ảnh", "AIAnalysis");
+    return withAiInputCache(node, "AIAnalysis", withAiTaskReport(attachAiUsage(payload.result, payload.usage, settings, visionReserve), task, files.map((file) => ({ name: file.name, type: file.type }))), materials);
   }
 
   if (node.data.label === "Phân tích âm thanh bằng AI") {
@@ -2662,7 +2742,8 @@ async function executeAiRuntimeNode(node: WorkflowNodeLike, inputs: Record<strin
     const audioPrompt = `Mục tiêu: ${goal}\nYêu cầu: ${prompt}\n\nTRANSCRIPT ÂM THANH:\n${transcript.slice(0, 100000)}`;
     const audioReserve = estimatedAiInputTokens(`${systemPrompt}\n${audioPrompt}`);
     const payload = await apiJson({ action: "ai", apiKey: settings.apiKey, model: settings.model, maxOutputTokens: aiBudget(settings, audioReserve), json: true, system: `${systemPrompt}\nBạn là chuyên gia phân tích âm thanh. Chỉ kết luận từ transcript được cung cấp; không suy đoán hình ảnh hoặc chuyển động.`, prompt: audioPrompt, promptCacheKey: materials.record.cacheKey });
-    return withAiInputCache(node, "AIAnalysis", { ...attachAiUsage(payload.result, payload.usage, settings, audioReserve), transcript, method: "audio-transcript+AI" }, materials);
+    const task = aiTaskSpecForNode(node, goal || "Phân tích âm thanh", "AIAnalysis");
+    return withAiInputCache(node, "AIAnalysis", withAiTaskReport({ ...attachAiUsage(payload.result, payload.usage, settings, audioReserve), transcript, method: "audio-transcript+AI" }, task, [{ kind: "audio-transcript", characters: transcript.length }]), materials);
   }
 
   if (node.data.label === "Phân tích video bằng AI") {
@@ -2726,7 +2807,8 @@ async function executeAiRuntimeNode(node: WorkflowNodeLike, inputs: Record<strin
       promptCacheKey: materials.record.cacheKey,
     });
     const analysis = attachAiUsage(payload.result, payload.usage, settings, videoReserve);
-    return withAiInputCache(node, "AIAnalysis", {
+    const task = aiTaskSpecForNode(node, goal || "Phân tích video", "AIAnalysis");
+    return withAiInputCache(node, "AIAnalysis", withAiTaskReport({
       ...analysis,
        method: hasTimedTranscript ? "frames + supplied-timed-transcript" : "frames + audio-transcript",
       evidence: {
@@ -2736,7 +2818,7 @@ async function executeAiRuntimeNode(node: WorkflowNodeLike, inputs: Record<strin
          timedTranscriptSegments: list<Record<string, unknown>>(timedTranscript.segments).length,
         audioTranscriptCharacters: audioText.length,
       },
-    }, materials);
+    }, task, frameTimeline), materials);
   }
   throw new Error(`Node AI “${node.data.label}” chưa có bộ thực thi`);
 }

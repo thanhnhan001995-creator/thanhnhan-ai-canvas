@@ -17,6 +17,47 @@ export type ArtifactType = (typeof ARTIFACT_TYPES)[number];
 export type PortCardinality = "one" | "many";
 export type ArtifactStatus = "ready" | "running" | "failed" | "stale";
 export type NodeRunStatus = "queued" | "running" | "success" | "failed" | "cancelled";
+export type AIExecutionMode = "api" | "local";
+export type AIExecutionProfile = {
+  schemaVersion: typeof ARTIFACT_SCHEMA_VERSION;
+  kind: "tesseract-ai-profile";
+  provider: string;
+  model: string;
+  executionMode: AIExecutionMode;
+  endpoint?: string;
+  /** Chỉ là khóa tra bí mật trong runtime; tuyệt đối không phải API key. */
+  secretRef?: string;
+  temperature: number;
+  maxOutputTokens: number;
+  maxInputTokens: number;
+  maxOutputWorkflowTokens: number;
+};
+
+export type TaskSpec = {
+  schemaVersion: typeof ARTIFACT_SCHEMA_VERSION;
+  kind: "tesseract-task";
+  id: string;
+  nodeId: string;
+  goal: string;
+  expectedOutput: ArtifactType;
+  inputTypes: ArtifactType[];
+  instructions?: string;
+  successCriteria: string[];
+};
+
+export type ReportStatus = "completed" | "needs-review" | "needs-fix" | "failed";
+export type AIReport = {
+  schemaVersion: typeof ARTIFACT_SCHEMA_VERSION;
+  kind: "tesseract-ai-report";
+  status: ReportStatus;
+  conclusion: string;
+  evidence: unknown[];
+  confidence?: number;
+  passed?: boolean;
+  needsFix: boolean;
+  repairItems: Array<{ location?: string; reason: string; fix?: string }>;
+  task: TaskSpec;
+};
 
 export type PortSpec = {
   id: string;
@@ -88,10 +129,10 @@ export function cardinalityForPortType(value: string): PortCardinality {
 export function artifactTypeForPortType(value: string): ArtifactType {
   const type = normalizedPortType(value);
   if (/^(du lieu|dữ liệu|any|free|workflow|gia tri|giá trị)$/i.test(type)) return "Any";
-  if (/^(text|content|script|outline|chapter|subtitle|caption|prompt|systemprompt|query|brief|request|thuat ngu|thuật ngữ)$/i.test(type)) return "Text";
+  if (/^(text|aitext|content|script|outline|chapter|subtitle|caption|prompt|systemprompt|query|brief|request|thuat ngu|thuật ngữ)$/i.test(type)) return "Text";
   if (/^(boolean|condition)$/i.test(type)) return "Boolean";
   if (/^(number|integer|float)$/i.test(type)) return "Number";
-  if (/^(json|record|object|variable)$/i.test(type)) return "Record";
+  if (/^(json|aijson|record|object|variable)$/i.test(type)) return "Record";
   if (/^(folder|searchfolder)$/i.test(type)) return "Folder";
   if (/^(imagesearchlist)$/i.test(type) || /^image$/i.test(type) && /\[\]$/.test(value)) return "ImageSet";
   if (/^(image|thumbnail|imagesample|imagesearch)$/i.test(type)) return "Image";
@@ -100,7 +141,7 @@ export function artifactTypeForPortType(value: string): ArtifactType {
   if (/^(frameindex|videoindex|storyboard)$/i.test(type)) return "FrameIndex";
   if (/^(timedtranscript|transcript)$/i.test(type)) return "TimedTranscript";
   if (/^(table)$/i.test(type)) return "Table";
-  if (/^(qareport|report|aianalysis|aijson|aiscore|aiapprovedresult|imagematch|image-match)$/i.test(type)) return "Report";
+  if (/^(qareport|report|aianalysis|aiscore|aiapprovedresult|highlightplan|imagematch|image-match)$/i.test(type)) return "Report";
   if (/^(storedfile|storedfiles)$/i.test(type) || /^file$/i.test(type) && /\[\]$/.test(value)) return "StoredFiles";
   if (/^(file|namedfile|document|url)$/i.test(type)) return "File";
   if (/^(aimodel|aiprovider|apikey|profile|configuration|config)$/i.test(type)) return "AIExecutionProfile";
@@ -116,6 +157,62 @@ export function portSpecFor(port: Pick<PortSpec, "id" | "label" | "type"> & Part
     artifactType: port.artifactType ?? artifactTypeForPortType(port.type),
     cardinality: port.cardinality ?? cardinalityForPortType(port.type),
     required: port.required === true,
+  };
+}
+
+function boundedNumber(value: unknown, fallback: number, minimum: number, maximum: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(minimum, Math.min(maximum, parsed)) : fallback;
+}
+
+/** Chuẩn hóa cấu hình thực thi AI; secretRef chỉ trỏ đến bí mật runtime. */
+export function aiExecutionProfile(input: Partial<AIExecutionProfile> & { provider?: unknown; model?: unknown; endpoint?: unknown; localEndpoint?: unknown; secretRef?: unknown; temperature?: unknown; maxOutputTokens?: unknown; maxInputTokens?: unknown; maxOutputWorkflowTokens?: unknown }): AIExecutionProfile {
+  const provider = String(input.provider ?? "OpenAI").trim() || "OpenAI";
+  const model = String(input.model ?? "").trim();
+  const endpoint = String(input.endpoint ?? input.localEndpoint ?? "").trim();
+  const executionMode: AIExecutionMode = provider === "Ollama" || provider === "AI local" ? "local" : "api";
+  return {
+    schemaVersion: ARTIFACT_SCHEMA_VERSION,
+    kind: "tesseract-ai-profile",
+    provider,
+    model,
+    executionMode,
+    ...(endpoint ? { endpoint } : {}),
+    ...(String(input.secretRef ?? "").trim() ? { secretRef: String(input.secretRef).trim() } : {}),
+    temperature: boundedNumber(input.temperature, 0.7, 0, 2),
+    maxOutputTokens: boundedNumber(input.maxOutputTokens, 2_000, 16, 50_000),
+    maxInputTokens: boundedNumber(input.maxInputTokens, 40_000, 1_000, 40_000),
+    maxOutputWorkflowTokens: boundedNumber(input.maxOutputWorkflowTokens, 20_000, 500, 20_000),
+  };
+}
+
+export function taskSpec(input: Omit<TaskSpec, "schemaVersion" | "kind" | "id" | "successCriteria"> & { successCriteria?: string[]; instructions?: string }): TaskSpec {
+  return {
+    schemaVersion: ARTIFACT_SCHEMA_VERSION,
+    kind: "tesseract-task",
+    id: nextId("task"),
+    nodeId: input.nodeId,
+    goal: input.goal.trim() || "Xử lý dữ liệu đầu vào",
+    expectedOutput: input.expectedOutput,
+    inputTypes: [...new Set(input.inputTypes)],
+    ...(input.instructions?.trim() ? { instructions: input.instructions.trim() } : {}),
+    successCriteria: input.successCriteria?.filter(Boolean) ?? ["Kết luận chỉ dựa trên bằng chứng đầu vào."],
+  };
+}
+
+/** Bao chuẩn cho kết quả AI; không tự tuyên bố đạt khi chưa có tiêu chí máy kiểm tra. */
+export function aiReport(input: Omit<AIReport, "schemaVersion" | "kind" | "repairItems"> & { repairItems?: AIReport["repairItems"] }): AIReport {
+  return {
+    schemaVersion: ARTIFACT_SCHEMA_VERSION,
+    kind: "tesseract-ai-report",
+    status: input.status,
+    conclusion: input.conclusion.trim(),
+    evidence: input.evidence,
+    ...(input.confidence === undefined ? {} : { confidence: Math.max(0, Math.min(1, input.confidence)) }),
+    ...(input.passed === undefined ? {} : { passed: input.passed }),
+    needsFix: input.needsFix,
+    repairItems: input.repairItems ?? [],
+    task: input.task,
   };
 }
 

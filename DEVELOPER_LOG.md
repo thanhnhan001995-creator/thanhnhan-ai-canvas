@@ -1801,6 +1801,14 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm test` — build thành công, **59/59** bài kiểm tra đạt. Bổ sung regression tĩnh cho metadata Artifact của Stored file và thao tác reset.
 
+## 2026-11-01 +07:00 — DAT-06: AIExecutionProfile, TaskSpec và Report
+
+- Thêm hợp đồng `AIExecutionProfile`: provider, model, chế độ `api`/`local`, endpoint, các giới hạn token và `secretRef`. API key không còn nằm trong profile/output/Artifact; nó chỉ sống trong cache phiên runtime và được tra lại bằng `secretRef` khi gọi AI.
+- Node `Chọn nhà cung cấp AI` và `Chọn mô hình AI` nay phát profile chuẩn. Workflow cũ vẫn được đọc qua adapter trong `aiCallSettings`, nên không phải sửa lại dây hay file `.tess` đã có.
+- Node gọi AI tạo `TaskSpec` (mục tiêu, kiểu input/output, tiêu chí) và bao kết quả bằng `Report` chuẩn gồm kết luận, bằng chứng, độ tin cậy khi có, trạng thái cần xem lại/cần sửa và mục sửa. Các trường output cũ được giữ nguyên để node sau tương thích.
+
+**Kiểm tra:** `npm test` — build thành công, **61/61** bài kiểm tra đạt. Regression xác nhận profile Ollama/API không chứa API key, giữ `secretRef`, và Report luôn truy được TaskSpec/bằng chứng.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 
