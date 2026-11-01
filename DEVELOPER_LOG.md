@@ -1865,6 +1865,16 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm.cmd test` — build thành công, **72/72** bài kiểm tra đạt. Regression mô phỏng AI trả cảnh báo có bằng chứng, xác nhận verdict Cần sửa, repair item, Report và profile bắt buộc.
 
+## 2026-11-01 +07:00 — AIC-04: Tách node media khỏi thư viện AI tổng quát
+
+**Phạm vi:** Đưa lối thêm node phân tích media về đúng nhóm dữ liệu, không xóa khả năng chạy workflow media cũ.
+
+- Node chi tiết `Phân tích hình ảnh bằng AI`, `Phân tích âm thanh bằng AI`, `Phân tích video bằng AI` nay lần lượt thuộc Hình ảnh, Âm thanh và Video.
+- Thư viện Cơ bản có ba preset mới cùng tên ở đúng nhóm đó. Preset `Phân tích media bằng AI` cũ bị ẩn khi thêm node mới, nhưng vẫn có trong catalog nội bộ để các workflow đã lưu đọc/chạy đúng executor cũ.
+- Node AI lõi mới không còn gắn tên video/media; xử lý media vẫn nhận AIModel qua dây như trước.
+
+**Kiểm tra:** `npm.cmd test` — build thành công, **72/72** bài kiểm tra đạt. Regression xác nhận ba nhóm mới, preset cũ được đánh dấu tương thích/ẩn khỏi thư viện và các cổng FrameIndex/AIModel của video vẫn giữ nguyên.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 

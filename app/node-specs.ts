@@ -1849,7 +1849,7 @@ export const NODE_SPECS: NodeSpec[] = [
     "output": "AIResult, Report, CachedData"
   },
   {
-    "group": "AI & mô hình",
+    "group": "Hình ảnh",
     "order": 8,
     "name": "Phân tích hình ảnh bằng AI",
     "settings": "Yêu cầu phân tích, vùng ưu tiên, mức chi tiết; model nhận từ AIModel",
@@ -1857,7 +1857,7 @@ export const NODE_SPECS: NodeSpec[] = [
     "output": "AIAnalysis, CachedData"
   },
   {
-    "group": "AI & mô hình",
+    "group": "Âm thanh",
     "order": 9,
     "name": "Phân tích âm thanh bằng AI",
     "settings": "Yêu cầu phân tích, ngôn ngữ âm thanh; model nhận từ AIModel",
@@ -1865,7 +1865,7 @@ export const NODE_SPECS: NodeSpec[] = [
     "output": "AIAnalysis, CachedData"
   },
   {
-    "group": "AI & mô hình",
+    "group": "Video",
     "order": 9.5,
     "name": "Phân tích video bằng AI",
     "settings": "Mục tiêu, frame, timeline frame, âm thanh, transcript theo thời gian (tùy chọn); model nhận từ AIModel",

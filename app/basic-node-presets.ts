@@ -7,6 +7,8 @@ export type BasicNodePreset = {
   nodes: string[];
   /** The block obtains its source through its own configuration, not an edge. */
   sourceNode?: boolean;
+  /** Giữ để mở workflow cũ nhưng không hiện khi người dùng thêm node mới. */
+  hiddenInLibrary?: boolean;
   operationLabels?: Record<string, string>;
 };
 
@@ -17,7 +19,10 @@ export const BASIC_NODE_PRESETS: BasicNodePreset[] = [
   { id: "ai-prompt", label: "Tạo prompt AI", category: "AI & mô hình", description: "Soạn system prompt và tạo prompt từ dữ liệu workflow.", mode: "choice", nodes: ["Soạn system prompt", "Tạo prompt từ dữ liệu"] },
   { id: "ai-run", label: "Xử lý văn bản bằng AI", category: "AI & mô hình", description: "Dùng AI để tạo văn bản hoặc dữ liệu JSON từ Prompt và SystemPrompt; không nhận media trực tiếp.", mode: "choice", nodes: ["Gọi AI tạo văn bản", "Gọi AI trả JSON"] },
   { id: "ai-task", label: "Thực thi tác vụ AI", category: "AI & mô hình", description: "Thực hiện một tác vụ văn bản hoặc JSON bằng AI profile được nối vào; trả kết quả, TaskSpec và Report có bằng chứng.", mode: "pipeline", nodes: ["Thực thi tác vụ AI"] },
-  { id: "ai-media", label: "Phân tích media bằng AI", category: "AI & mô hình", description: "Phân tích riêng hình ảnh hoặc âm thanh, hoặc kết hợp frame, audio và transcript để phân tích video.", mode: "choice", nodes: ["Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"] },
+  { id: "ai-media", label: "Phân tích media bằng AI", category: "AI & mô hình", description: "Preset tương thích cho workflow cũ. Node phân tích media mới được thêm trong đúng nhóm Hình ảnh, Âm thanh hoặc Video.", mode: "choice", nodes: ["Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"], hiddenInLibrary: true },
+  { id: "media-image-ai", label: "Phân tích ảnh bằng AI", category: "Hình ảnh", description: "Gửi Image[] và Prompt tới AI profile để phân tích hình ảnh; không nằm trong thư viện AI tổng quát.", mode: "pipeline", nodes: ["Phân tích hình ảnh bằng AI"] },
+  { id: "media-audio-ai", label: "Phân tích âm thanh bằng AI", category: "Âm thanh", description: "Phiên âm và phân tích Audio bằng AI profile; không nằm trong thư viện AI tổng quát.", mode: "pipeline", nodes: ["Phân tích âm thanh bằng AI"] },
+  { id: "media-video-ai", label: "Phân tích video bằng AI", category: "Video", description: "Đối chiếu frame, FrameIndex, Audio và transcript tùy chọn bằng AI profile.", mode: "pipeline", nodes: ["Phân tích video bằng AI"] },
   { id: "prepare-video-analysis", label: "Chuẩn bị tư liệu phân tích video", category: "Video", description: "Từ một video, trích frame, tách audio và tạo transcript có timecode để cấp đủ ba tư liệu cho Phân tích video bằng AI.", mode: "pipeline", nodes: ["Trích frame từ video", "Tách âm thanh từ video", "Phiên âm video theo thời gian"] },
   { id: "ai-review", label: "Đánh giá đầu ra AI", category: "AI & mô hình", description: "Chấm điểm và duyệt đầu ra trước khi đưa sang bước sau.", mode: "pipeline", nodes: ["Chấm điểm đầu ra AI", "Duyệt đầu ra AI"] },
   { id: "ai-check", label: "Kiểm tra bằng AI", category: "Kiểm tra chất lượng", description: "Dùng AI profile để đối chiếu sản phẩm với checklist; trả verdict, bằng chứng và việc cần sửa.", mode: "pipeline", nodes: ["Kiểm tra bằng AI"] },

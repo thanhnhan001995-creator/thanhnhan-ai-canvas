@@ -123,8 +123,8 @@ test("AI setup node emits a reusable profile without exposing its API key", asyn
 
 test("basic catalog covers valid primitive nodes without replacing the advanced catalog", () => {
   const primitiveNames = new Set(NODE_SPECS.map((spec) => spec.name));
-  assert.equal(BASIC_NODE_PRESETS.length, 62);
-  assert.equal(new Set(BASIC_NODE_PRESETS.map((preset) => preset.id)).size, 62);
+  assert.equal(BASIC_NODE_PRESETS.length, 65);
+  assert.equal(new Set(BASIC_NODE_PRESETS.map((preset) => preset.id)).size, 65);
   for (const preset of BASIC_NODE_PRESETS) {
     assert.ok(preset.nodes.length > 0, `${preset.label} has no steps`);
     for (const label of preset.nodes) assert.ok(primitiveNames.has(label), `${preset.label} references missing node ${label}`);
@@ -132,10 +132,17 @@ test("basic catalog covers valid primitive nodes without replacing the advanced 
   assert.equal(NODE_SPECS.length, 241);
   assert.deepEqual(BASIC_NODE_PRESETS.find((preset) => preset.id === "ai-task")?.nodes, ["Thực thi tác vụ AI"]);
   assert.deepEqual(BASIC_NODE_PRESETS.find((preset) => preset.id === "ai-check")?.nodes, ["Kiểm tra bằng AI"]);
+  assert.equal(BASIC_NODE_PRESETS.find((preset) => preset.id === "ai-media")?.hiddenInLibrary, true);
+  assert.equal(BASIC_NODE_PRESETS.find((preset) => preset.id === "media-image-ai")?.category, "Hình ảnh");
+  assert.equal(BASIC_NODE_PRESETS.find((preset) => preset.id === "media-audio-ai")?.category, "Âm thanh");
+  assert.equal(BASIC_NODE_PRESETS.find((preset) => preset.id === "media-video-ai")?.category, "Video");
   assert.equal(NODE_SPECS.find((spec) => spec.name === "Thực thi tác vụ AI")?.output, "AIResult, Report, CachedData");
   assert.equal(BASIC_NODE_PRESETS.find((preset) => preset.id === "ai-media")?.label, "Phân tích media bằng AI");
   assert.deepEqual(BASIC_NODE_PRESETS.find((preset) => preset.id === "ai-media")?.nodes, ["Phân tích hình ảnh bằng AI", "Phân tích âm thanh bằng AI", "Phân tích video bằng AI"]);
   assert.match(NODE_SPECS.find((spec) => spec.name === "Phân tích video bằng AI")?.input ?? "", /FrameIndex/);
+  assert.equal(NODE_SPECS.find((spec) => spec.name === "Phân tích hình ảnh bằng AI")?.group, "Hình ảnh");
+  assert.equal(NODE_SPECS.find((spec) => spec.name === "Phân tích âm thanh bằng AI")?.group, "Âm thanh");
+  assert.equal(NODE_SPECS.find((spec) => spec.name === "Phân tích video bằng AI")?.group, "Video");
   assert.deepEqual(BASIC_NODE_PRESETS.find((preset) => preset.id === "prepare-video-analysis")?.nodes, ["Trích frame từ video", "Tách âm thanh từ video", "Phiên âm video theo thời gian"]);
   assert.equal(BASIC_NODE_PRESETS.find((preset) => preset.id === "prepare-video-analysis")?.category, "Video");
   assert.equal(BASIC_NODE_PRESETS.some((preset) => preset.id === "extract-video-frames"), false);

@@ -2030,8 +2030,9 @@ const BASIC_NODE_DEFINITIONS: NodeDefinition[] = ensureUniqueIconsByCategory(BAS
 // “Lấy transcript” là node API cũ. Giữ định nghĩa nội bộ để nhận diện workflow
 // đã lưu, nhưng không còn cho thêm mới: mọi trường hợp dùng node thống nhất bên dưới.
 const HIDDEN_LEGACY_ADVANCED_FAMILIES = new Set(["Trích xuất transcript video"]);
+const HIDDEN_LEGACY_BASIC_KINDS = new Set(BASIC_NODE_PRESETS.filter((preset) => preset.hiddenInLibrary).map((preset) => `basic-${preset.id}`));
 const NODE_LIBRARY: Record<LibraryMode, readonly NodeDefinition[]> = {
-  basic: BASIC_NODE_DEFINITIONS,
+  basic: BASIC_NODE_DEFINITIONS.filter((definition) => !HIDDEN_LEGACY_BASIC_KINDS.has(definition.kind)),
   advanced: [...WORKFLOW_INTERFACE_NODE_DEFINITIONS, WORKFLOW_CALL_NODE_DEFINITION, ...NODE_DEFINITIONS.filter((definition) => !HIDDEN_LEGACY_ADVANCED_FAMILIES.has(definition.family))],
 };
 const ALL_NODE_DEFINITIONS = [...BASIC_NODE_DEFINITIONS, ...WORKFLOW_INTERFACE_NODE_DEFINITIONS, WORKFLOW_CALL_NODE_DEFINITION, ...NODE_DEFINITIONS];
