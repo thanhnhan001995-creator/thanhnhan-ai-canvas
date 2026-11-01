@@ -1825,6 +1825,16 @@ dung qua OpenAI. Chưa được ghi nhận là đã chạy Gemini, Claude hoặc
 
 **Kiểm tra:** `npm test` — build thành công, **63/63** bài kiểm tra đạt. Có test mới cho migration `.tess` v2 và chặn file mới hơn app.
 
+## 2026-11-01 +07:00 — SYNC-01 đến SYNC-03, RCR-01 đến RCR-02: Đồng bộ workflow gọi lại an toàn
+
+**Phạm vi:** Đồng bộ interface của node `Gọi workflow`, kiểm lỗi line sau khi interface đổi và nhận diện vòng đệ quy theo định danh workflow thực.
+
+- Khi Cổng vào/Cổng ra của workflow được gọi thay đổi, app tạo kế hoạch đồng bộ cổng, giữ nguyên các line còn hợp đồng tương thích và chỉ liệt kê line cần người dùng nối lại. App không còn xóa toàn bộ line quanh node `Gọi workflow`.
+- Trước khi kiểm tra/chạy workflow, app đối chiếu interface đã lưu với interface hiện tại; chặn rõ ràng khi caller chưa đồng bộ hoặc còn cổng/line không hợp lệ.
+- Định danh đệ quy nay kết hợp `workflowId` với đường dẫn chuẩn hóa. Vì vậy các file Save As/copy giữ cùng ID không còn bị báo sai là tự gọi chính mình, trong khi vòng A → B → C → A thật vẫn bị chặn và chỉ đúng node gọi tạo vòng.
+
+**Kiểm tra:** `npm.cmd test` — build thành công, **68/68** bài kiểm tra đạt; bao gồm hồi quy giữ line khi đồng bộ, cổng mới không buộc nối lại, line mất/đổi kiểu cần nối lại, nhận diện đường dẫn Windows và vòng đệ quy thật. Không đóng gói và không push.
+
 ```md
 ## YYYY-MM-DD HH:mm +07:00 — Tên thay đổi
 

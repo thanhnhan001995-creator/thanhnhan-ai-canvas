@@ -31,7 +31,7 @@ test("detects indirect workflow recursion A to B to C to A with the full chain",
   const cycles = await cyclesFrom(a, new Map([["A", a], ["B", b], ["C", c]]));
 
   assert.equal(cycles.length, 1);
-  assert.equal(cycles[0].originCall.id, "call-b");
+  assert.equal(cycles[0].originCall.id, "call-a");
   assert.deepEqual(cycles[0].chain, ["Workflow A", "Workflow B", "Workflow C", "Workflow A"]);
 });
 

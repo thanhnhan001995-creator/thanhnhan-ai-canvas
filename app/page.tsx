@@ -37,7 +37,8 @@ import { LOCAL_AI_REGISTRY_STORAGE_KEY, localAiModelIds, mergeScannedOllamaModel
 import { nextNodeName, nodeFamilyOf } from "./node-identity";
 import { ARTIFACT_TYPES, artifactOutputsForPorts, artifactSummary, executionDiagnostic, finishNodeRun, portCardinalityCompatible, portSpecFor, startNodeRun, unwrapArtifact, type Artifact, type ArtifactOutputMap, type ArtifactSummary, type ArtifactType, type NodeRunRecord, type PortCardinality } from "./data-contracts";
 import { createWorkflowId, describeWorkflowInterfaceChange, normalizeWorkflowInterface, parseWorkflowDocument, prepareWorkflowForSave, serializeTessWorkflow, workflowInterfaceFingerprint, workflowNameFromPath } from "../shared/tess-document.mjs";
-import { findWorkflowReferenceCycles } from "../shared/workflow-recursion.mjs";
+import { planWorkflowCallInterfaceSync, reconnectIssuesForWorkflowCall } from "../shared/workflow-call-sync.mjs";
+import { findWorkflowReferenceCycles, workflowReferenceKey } from "../shared/workflow-recursion.mjs";
 
 declare global {
   interface Window {
@@ -470,6 +471,8 @@ interface ContentNodeData extends Record<string, unknown> {
   workflowPorts?: WorkflowGatewayPort[];
   /** Workflow ngoài được node Gọi workflow tham chiếu cùng interface đã đọc. */
   calledWorkflow?: CalledWorkflowReference;
+  /** Trạng thái đồng bộ interface của node Gọi workflow, không tự sửa line. */
+  workflowCallSync?: WorkflowCallSyncState;
   /** File đã được node Lưu file ghi thành công và có thể tái sử dụng. */
   storedFiles?: StoredFileReference[];
   /** Hợp đồng Artifact của lô stored file gần nhất, giữ type và provenance. */
@@ -520,6 +523,21 @@ type CalledWorkflowReference = {
   tabId?: string;
   /** Bản .tess đã đọc qua input web, để chạy thử không cần Tesseract Desktop. */
   embeddedWorkflow?: WorkflowDocumentLike;
+};
+
+type WorkflowCallReconnectIssue = {
+  edgeId: string;
+  portId: string;
+  direction: "inputs" | "outputs";
+  reason: string;
+};
+
+type WorkflowCallSyncState = {
+  /** Snapshot và cổng đang cùng interface, hoặc caller cần xác nhận lại. */
+  state: "synced" | "needs-sync" | "needs-reconnect";
+  checkedAt: string;
+  changeSummary?: string;
+  reconnectIssues?: WorkflowCallReconnectIssue[];
 };
 
 const WORKFLOW_INPUT_GATEWAY_FAMILY = "Cổng vào";
@@ -615,6 +633,48 @@ function portsForCalledWorkflow(workflowInterface: WorkflowInterfaceShape): Pick
     inputs: toPorts(workflowInterface.inputs, true),
     outputs: toPorts(workflowInterface.outputs, false),
   };
+}
+
+/** Đồng bộ interface chỉ thay đổi danh sách cổng; mọi line cũ được giữ lại để
+ * người dùng chủ động kiểm tra/nối lại khi hợp đồng đã đổi. */
+function workflowCallSyncDetails(
+  previousInterface: WorkflowInterfaceShape | undefined,
+  nextInterface: WorkflowInterfaceShape,
+  edges: Edge[],
+  nodeId: string,
+): { plan: ReturnType<typeof planWorkflowCallInterfaceSync>; state: WorkflowCallSyncState } {
+  const plan = planWorkflowCallInterfaceSync(previousInterface ?? nextInterface, nextInterface);
+  const reconnectIssues = reconnectIssuesForWorkflowCall({ edges, nodeId, plan }) as WorkflowCallReconnectIssue[];
+  return {
+    plan,
+    state: {
+      state: reconnectIssues.length ? "needs-reconnect" : "synced",
+      checkedAt: new Date().toISOString(),
+      ...(plan.changed ? { changeSummary: plan.summary } : {}),
+      ...(reconnectIssues.length ? { reconnectIssues } : {}),
+    },
+  };
+}
+
+/** Kiểm tra lại line sau khi caller đã nhận interface mới. Không xóa line sai:
+ * trả lỗi để người dùng biết chính xác line nào phải nối lại. */
+function invalidWorkflowCallLines(nodes: ContentFlowNode[], edges: Edge[], nodeId: string): WorkflowCallReconnectIssue[] {
+  return edges.flatMap((edge) => {
+    if (edge.source !== nodeId && edge.target !== nodeId) return [];
+    const source = nodes.find((node) => node.id === edge.source);
+    const target = nodes.find((node) => node.id === edge.target);
+    const output = source?.data.outputs.find((port) => port.id === edge.sourceHandle);
+    const input = target?.data.inputs.find((port) => port.id === edge.targetHandle);
+    const direction: "inputs" | "outputs" = edge.target === nodeId ? "inputs" : "outputs";
+    const portId = String(direction === "inputs" ? edge.targetHandle ?? "" : edge.sourceHandle ?? "").replace(/^workflow-port-/, "");
+    if (!source || !target || !output || !input) {
+      return [{ edgeId: edge.id, portId, direction, reason: "Line đang nối đến cổng không còn tồn tại." }];
+    }
+    if (!portsCanConnect(output, input)) {
+      return [{ edgeId: edge.id, portId, direction, reason: `Line “${source.data.label} → ${target.data.label}” không còn tương thích với hợp đồng cổng mới.` }];
+    }
+    return [];
+  });
 }
 
 type WorkflowOutlinerDrag = { kind: "node" | "group"; id: string };
@@ -4547,13 +4607,15 @@ function WorkflowApp() {
       const workflowInterface = normalizeWorkflowInterfaceShape(workflow.workflowInterface);
       const reference: CalledWorkflowReference = { source: "file", path: result.path, workflowId: workflow.workflowId, workflowInterface, interfaceFingerprint: workflowInterfaceFingerprint(workflowInterface) };
       const callPorts = portsForCalledWorkflow(workflowInterface);
+      const existingCall = nodes.find((node) => node.id === nodeId);
+      const sync = workflowCallSyncDetails(existingCall?.data.calledWorkflow?.workflowInterface, workflowInterface, edges, nodeId);
       rememberCanvasChange();
-      setEdges((current) => current.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
       setNodes((current) => current.map((node) => node.id === nodeId ? {
         ...node,
         data: {
           ...node.data,
           calledWorkflow: reference,
+          workflowCallSync: sync.state,
           inputs: callPorts.inputs,
           outputs: callPorts.outputs,
           config: {
@@ -4567,13 +4629,13 @@ function WorkflowApp() {
           output: undefined,
         },
       } : node));
-      setNotice(`Đã đồng bộ ${workflowInterface.inputs.length} cổng vào và ${workflowInterface.outputs.length} cổng ra từ “${workflowNameFromPath(result.path)}”.`);
+      setNotice(`Đã đồng bộ ${workflowInterface.inputs.length} cổng vào và ${workflowInterface.outputs.length} cổng ra từ “${workflowNameFromPath(result.path)}”.${sync.state.reconnectIssues?.length ? ` Có ${sync.state.reconnectIssues.length} line cần nối lại.` : " Các line tương thích được giữ nguyên."}`);
       return true;
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Interface workflow cần gọi không hợp lệ.");
       return false;
     }
-  }, [rememberCanvasChange, setEdges, setNodes]);
+  }, [edges, nodes, rememberCanvasChange, setNodes]);
 
   const syncBrowserWorkflowReference = useCallback(async (nodeId: string, file: File) => {
     try {
@@ -4592,13 +4654,15 @@ function WorkflowApp() {
         embeddedWorkflow: workflow,
       };
       const callPorts = portsForCalledWorkflow(workflowInterface);
+      const existingCall = nodes.find((node) => node.id === nodeId);
+      const sync = workflowCallSyncDetails(existingCall?.data.calledWorkflow?.workflowInterface, workflowInterface, edges, nodeId);
       rememberCanvasChange();
-      setEdges((current) => current.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
       setNodes((current) => current.map((node) => node.id === nodeId ? {
         ...node,
         data: {
           ...node.data,
           calledWorkflow: reference,
+          workflowCallSync: sync.state,
           inputs: callPorts.inputs,
           outputs: callPorts.outputs,
           config: {
@@ -4612,13 +4676,13 @@ function WorkflowApp() {
           output: undefined,
         },
       } : node));
-      setNotice(`Đã nạp và đồng bộ ${workflowInterface.inputs.length} cổng vào, ${workflowInterface.outputs.length} cổng ra từ “${workflowNameFromPath(file.name)}” trong trình duyệt.`);
+      setNotice(`Đã nạp và đồng bộ ${workflowInterface.inputs.length} cổng vào, ${workflowInterface.outputs.length} cổng ra từ “${workflowNameFromPath(file.name)}” trong trình duyệt.${sync.state.reconnectIssues?.length ? ` Có ${sync.state.reconnectIssues.length} line cần nối lại.` : " Các line tương thích được giữ nguyên."}`);
       return true;
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Không thể đọc workflow cần gọi từ tệp đã chọn.");
       return false;
     }
-  }, [rememberCanvasChange, setEdges, setNodes]);
+  }, [edges, nodes, rememberCanvasChange, setNodes]);
 
   const syncCurrentWorkflowReference = useCallback((nodeId: string) => {
     const workflowInterface = workflowInterfaceFromNodes(nodes);
@@ -4632,13 +4696,15 @@ function WorkflowApp() {
       interfaceFingerprint: workflowInterfaceFingerprint(workflowInterface),
     };
     const callPorts = portsForCalledWorkflow(workflowInterface);
+    const existingCall = nodes.find((node) => node.id === nodeId);
+    const sync = workflowCallSyncDetails(existingCall?.data.calledWorkflow?.workflowInterface, workflowInterface, edges, nodeId);
     rememberCanvasChange();
-    setEdges((current) => current.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
     setNodes((current) => current.map((node) => node.id === nodeId ? {
       ...node,
       data: {
         ...node.data,
         calledWorkflow: reference,
+        workflowCallSync: sync.state,
         inputs: callPorts.inputs,
         outputs: callPorts.outputs,
         config: {
@@ -4652,8 +4718,8 @@ function WorkflowApp() {
         output: undefined,
       },
     } : node));
-    setNotice(`Đã đồng bộ ${workflowInterface.inputs.length} cổng vào và ${workflowInterface.outputs.length} cổng ra từ workflow đang mở “${workflowName.trim() || "Workflow hiện tại"}”.`);
-  }, [nodes, rememberCanvasChange, workflowId, workflowName]);
+    setNotice(`Đã đồng bộ ${workflowInterface.inputs.length} cổng vào và ${workflowInterface.outputs.length} cổng ra từ workflow đang mở “${workflowName.trim() || "Workflow hiện tại"}”.${sync.state.reconnectIssues?.length ? ` Có ${sync.state.reconnectIssues.length} line cần nối lại.` : " Các line tương thích được giữ nguyên."}`);
+  }, [edges, nodes, rememberCanvasChange, workflowId, workflowName]);
 
   const syncOpenWorkflowReference = useCallback((nodeId: string, targetTabId: string) => {
     const target = targetTabId === activeWorkflowTabId
@@ -4678,13 +4744,15 @@ function WorkflowApp() {
       interfaceFingerprint: workflowInterfaceFingerprint(workflowInterface),
     };
     const callPorts = portsForCalledWorkflow(workflowInterface);
+    const existingCall = nodes.find((node) => node.id === nodeId);
+    const sync = workflowCallSyncDetails(existingCall?.data.calledWorkflow?.workflowInterface, workflowInterface, edges, nodeId);
     rememberCanvasChange();
-    setEdges((current) => current.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
     setNodes((current) => current.map((node) => node.id === nodeId ? {
       ...node,
       data: {
         ...node.data,
         calledWorkflow: reference,
+        workflowCallSync: sync.state,
         inputs: callPorts.inputs,
         outputs: callPorts.outputs,
         config: {
@@ -4699,8 +4767,8 @@ function WorkflowApp() {
         output: undefined,
       },
     } : node));
-    setNotice(`Đã đồng bộ ${workflowInterface.inputs.length} cổng vào và ${workflowInterface.outputs.length} cổng ra từ tab “${target.name || "Workflow"}”.`);
-  }, [activeWorkflowTabId, nodes, rememberCanvasChange, workflowId, workflowName, workflowTabs]);
+    setNotice(`Đã đồng bộ ${workflowInterface.inputs.length} cổng vào và ${workflowInterface.outputs.length} cổng ra từ tab “${target.name || "Workflow"}”.${sync.state.reconnectIssues?.length ? ` Có ${sync.state.reconnectIssues.length} line cần nối lại.` : " Các line tương thích được giữ nguyên."}`);
+  }, [activeWorkflowTabId, edges, nodes, rememberCanvasChange, workflowId, workflowName, workflowTabs]);
 
   const executeWorkflowCallNode = useCallback(async (
     initialNode: ContentFlowNode,
@@ -4994,6 +5062,84 @@ function WorkflowApp() {
     }
   }, [edges, nodes, selectedId, setNodes]);
 
+  const checkWorkflowCallInterfaces = useCallback(async (): Promise<WorkflowCheckIssue[]> => {
+    const issues: WorkflowCheckIssue[] = [];
+    const updates = new Map<string, WorkflowCallSyncState>();
+    const activeInterface = workflowInterfaceFromNodes(nodes);
+    const openInterfaces = new Map(workflowTabs.map((tab) => [tab.id, normalizeWorkflowInterfaceShape(tab.workflowInterface)]));
+    openInterfaces.set(activeWorkflowTabId, activeInterface);
+    for (const node of nodes) {
+      if (nodeFamilyOf(node) !== "Gọi workflow" || node.data.paused || !node.data.calledWorkflow) continue;
+      const reference = node.data.calledWorkflow;
+      try {
+        let actualInterface: WorkflowInterfaceShape;
+        let targetLabel: string;
+        if (reference.source === "current" || reference.path === `current://${workflowId}`) {
+          actualInterface = activeInterface;
+          targetLabel = workflowName.trim() || "Workflow hiện tại";
+        } else if (reference.source === "open-tab" || reference.path.startsWith("open-tab://")) {
+          const tabId = reference.tabId ?? reference.path.slice("open-tab://".length);
+          const target = workflowTabs.find((tab) => tab.id === tabId);
+          if (!openInterfaces.has(tabId)) throw new Error("Tab workflow được gọi đã đóng hoặc không còn tồn tại.");
+          actualInterface = openInterfaces.get(tabId)!;
+          targetLabel = target?.name || "Workflow đang mở";
+        } else if (reference.embeddedWorkflow) {
+          actualInterface = normalizeWorkflowInterfaceShape(reference.embeddedWorkflow.workflowInterface);
+          targetLabel = workflowNameFromPath(reference.path);
+        } else if (window.contentFlowDesktop?.readWorkflowAtPath) {
+          const loaded = await window.contentFlowDesktop.readWorkflowAtPath(reference.path);
+          if (!loaded.workflow || loaded.error) throw new Error(loaded.error || `Không thể đọc “${reference.path}”.`);
+          actualInterface = normalizeWorkflowInterfaceShape((loaded.workflow as { workflowInterface?: unknown }).workflowInterface);
+          targetLabel = workflowNameFromPath(loaded.path ?? reference.path);
+        } else {
+          throw new Error("Không thể đọc lại file workflow ngoài ứng dụng Tesseract Desktop.");
+        }
+        const plan = planWorkflowCallInterfaceSync(reference.workflowInterface, actualInterface);
+        const reconnectIssues = plan.changed
+          ? reconnectIssuesForWorkflowCall({ edges, nodeId: node.id, plan }) as WorkflowCallReconnectIssue[]
+          : invalidWorkflowCallLines(nodes, edges, node.id);
+        if (plan.changed) {
+          const state: WorkflowCallSyncState = {
+            state: "needs-sync",
+            checkedAt: new Date().toISOString(),
+            changeSummary: plan.summary,
+            ...(reconnectIssues.length ? { reconnectIssues } : {}),
+          };
+          updates.set(node.id, state);
+          issues.push({ nodeId: node.id, beacon: "error", message: `“${node.data.label}” cần đồng bộ cổng với “${targetLabel}”: ${plan.summary}.` });
+        } else if (reconnectIssues.length) {
+          const state: WorkflowCallSyncState = {
+            state: "needs-reconnect",
+            checkedAt: new Date().toISOString(),
+            reconnectIssues,
+          };
+          updates.set(node.id, state);
+          issues.push({ nodeId: node.id, beacon: "error", message: `“${node.data.label}” có ${reconnectIssues.length} line cần nối lại sau khi đồng bộ cổng.` });
+        } else {
+          updates.set(node.id, { state: "synced", checkedAt: new Date().toISOString() });
+        }
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : "không thể đọc workflow được gọi.";
+        updates.set(node.id, { state: "needs-sync", checkedAt: new Date().toISOString(), changeSummary: detail });
+        issues.push({ nodeId: node.id, beacon: "error", message: `“${node.data.label}” không thể kiểm tra interface workflow: ${detail}` });
+      }
+    }
+    if (updates.size) {
+      const invalidNodeIds = new Set(issues.map((issue) => issue.nodeId));
+      setNodes((current) => current.map((node) => updates.has(node.id) ? {
+        ...node,
+        data: { ...node.data, workflowCallSync: updates.get(node.id), beacon: invalidNodeIds.has(node.id) ? "error" : node.data.beacon },
+      } : node));
+    }
+    if (issues.length) {
+      setWorkflowCheck((current) => [...current.filter((issue) => !issue.message.includes("đồng bộ cổng") && !issue.message.includes("kiểm tra interface workflow") && !issue.message.includes("line cần nối lại")), ...issues]);
+      setWorkflowCheckSummary({ message: `Không thể chạy workflow: ${issues.length} node Gọi workflow cần đồng bộ hoặc nối lại line.`, beacon: "error" });
+      setNotice(issues[0].message);
+      setSelectedId(issues[0].nodeId);
+    }
+    return issues;
+  }, [activeWorkflowTabId, edges, nodes, setNodes, workflowId, workflowName, workflowTabs]);
+
   const checkWorkflowRecursion = useCallback(async (): Promise<WorkflowCheckIssue[]> => {
     type RecursionDocument = WorkflowDocumentLike & { workflowId: string; workflowInterface?: unknown; name?: string; filePath?: string | null };
     type RecursionTarget = { key: string; label: string; document: RecursionDocument };
@@ -5025,24 +5171,30 @@ function WorkflowApp() {
       if (openTabId) {
         const target = openDocuments.get(openTabId);
         if (!target) throw new Error("Tab workflow được gọi đã đóng hoặc không còn tồn tại.");
-        return { key: target.workflowId, label: target.name || "Workflow đang mở", document: target };
+        const targetPath = target.filePath ?? `open-tab://${openTabId}`;
+        return { key: workflowReferenceKey({ workflowId: target.workflowId, path: targetPath }), label: target.name || "Workflow đang mở", document: target };
       }
       if (reference?.source === "current" || configuredPath === `current://${workflowId}`) {
-        return { key: currentDocument.workflowId, label: currentDocument.name || "Workflow hiện tại", document: currentDocument };
+        return { key: workflowReferenceKey({ workflowId: currentDocument.workflowId, path: currentDocument.filePath ?? `current://${currentDocument.workflowId}` }), label: currentDocument.name || "Workflow hiện tại", document: currentDocument };
       }
       if (!configuredPath) throw new Error("chưa chọn workflow cần gọi.");
       if (reference?.embeddedWorkflow) {
         const document = reference.embeddedWorkflow as RecursionDocument;
         if (!Array.isArray(document.nodes) || !Array.isArray(document.edges) || !document.workflowId) throw new Error(`workflow “${workflowNameFromPath(configuredPath)}” không hợp lệ hoặc chưa được lưu bằng Tesseract.`);
-        return { key: document.workflowId, label: workflowNameFromPath(configuredPath), document };
+        return { key: workflowReferenceKey({ workflowId: document.workflowId, path: configuredPath }), label: workflowNameFromPath(configuredPath), document };
       }
       const loaded = await window.contentFlowDesktop?.readWorkflowAtPath(configuredPath);
       if (!loaded?.workflow || loaded.error) throw new Error(loaded?.error || `không thể đọc “${configuredPath}”.`);
       const document = loaded.workflow as RecursionDocument;
       if (!Array.isArray(document.nodes) || !Array.isArray(document.edges) || !document.workflowId) throw new Error(`workflow “${workflowNameFromPath(configuredPath)}” không hợp lệ hoặc chưa được lưu bằng Tesseract.`);
-      return { key: document.workflowId, label: workflowNameFromPath(loaded.path ?? configuredPath), document: { ...document, filePath: loaded.path ?? configuredPath } };
+      const targetPath = loaded.path ?? configuredPath;
+      return { key: workflowReferenceKey({ workflowId: document.workflowId, path: targetPath }), label: workflowNameFromPath(targetPath), document: { ...document, filePath: targetPath } };
     };
-    const root: RecursionTarget = { key: currentDocument.workflowId, label: currentDocument.name || "Workflow hiện tại", document: currentDocument };
+    const root: RecursionTarget = {
+      key: workflowReferenceKey({ workflowId: currentDocument.workflowId, path: currentDocument.filePath ?? `current://${currentDocument.workflowId}` }),
+      label: currentDocument.name || "Workflow hiện tại",
+      document: currentDocument,
+    };
     try {
       const cycles = await findWorkflowReferenceCycles(root, {
         getKey: (target) => target.key,
@@ -5077,10 +5229,12 @@ function WorkflowApp() {
   const checkWorkflowWithRecursion = useCallback(async (): Promise<WorkflowCheckIssue[]> => {
     const basicIssues = checkWorkflow();
     if (basicIssues.length) return basicIssues;
+    const interfaceIssues = await checkWorkflowCallInterfaces();
+    if (interfaceIssues.length) return interfaceIssues;
     const recursionIssues = await checkWorkflowRecursion();
     if (!recursionIssues.length) setNotice(`Đã kiểm tra ${nodes.length} node: Tất cả sẵn sàng, không có vòng gọi workflow.`);
     return recursionIssues;
-  }, [checkWorkflow, checkWorkflowRecursion, nodes.length]);
+  }, [checkWorkflow, checkWorkflowCallInterfaces, checkWorkflowRecursion, nodes.length]);
   // Phím tắt được đăng ký trước khi hàm kiểm tra được khởi tạo; ref luôn trỏ
   // tới dữ liệu canvas hiện tại, không giữ closure cũ sau khi workflow đổi.
   checkWorkflowRef.current = () => { void checkWorkflowWithRecursion(); };
@@ -6019,6 +6173,32 @@ function WorkflowApp() {
                       {workflowTabs.map((tab) => <option key={tab.id} value={tab.id}>{tab.name || "New workflow"}{tab.id === activeWorkflowTabId ? " (tab hiện tại)" : ""}</option>)}
                     </select>
                     <button type="button" onClick={() => syncOpenWorkflowReference(selectedNode.id, selectedNode.data.calledWorkflow?.source === "open-tab" ? selectedNode.data.calledWorkflow.tabId ?? activeWorkflowTabId : activeWorkflowTabId)}>Đồng bộ workflow đã chọn</button>
+                  </section>
+                )}
+                {nodeFamilyOf(selectedNode) === "Gọi workflow" && selectedNode.data.calledWorkflow && (
+                  <section className="workflow-current-reference workflow-call-sync" aria-label="Đồng bộ cổng workflow">
+                    <div>
+                      <strong>{selectedNode.data.workflowCallSync?.state === "needs-sync" ? "Interface workflow đã thay đổi" : selectedNode.data.workflowCallSync?.state === "needs-reconnect" ? "Có line cần nối lại" : "Cổng workflow đã đồng bộ"}</strong>
+                      <small>{selectedNode.data.workflowCallSync?.changeSummary ?? "Cổng dùng port ID ổn định. Đồng bộ không tự xóa hoặc đổi line còn có thể kiểm tra."}</small>
+                    </div>
+                    {selectedNode.data.config.workflowTargetMode === "Chọn file .tess" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const reference = selectedNode.data.calledWorkflow;
+                          if (reference.source === "file" && reference.path && !reference.path.startsWith("browser://")) {
+                            void syncCalledWorkflowReference(selectedNode.id, reference.path);
+                          } else {
+                            setNotice("Để đồng bộ file đã nạp trong trình duyệt, hãy chọn lại file .tess. Bản file gốc không còn được trình duyệt giữ quyền đọc.");
+                          }
+                        }}
+                      >Đồng bộ cổng</button>
+                    )}
+                    {!!selectedNode.data.workflowCallSync?.reconnectIssues?.length && (
+                      <ul className="workflow-call-reconnect-list">
+                        {selectedNode.data.workflowCallSync.reconnectIssues.map((issue) => <li key={issue.edgeId}>{issue.reason} Nối lại line tương ứng.</li>)}
+                      </ul>
+                    )}
                   </section>
                 )}
                 {isWorkflowGatewayNode(selectedNode) && (() => {
